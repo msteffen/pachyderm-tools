@@ -26,6 +26,7 @@ const (
 
 	// for a further guide on golang time formats, see
 	// http://stackoverflow.com/questions/20234104/how-to-format-current-time-using-a-yyyymmddhhmmss-format
+	// This is ISO 8601 combined date/time
 	timeFormat = "2006-01-02T15:04:05Z0700"
 )
 
@@ -40,7 +41,7 @@ func getFakeAmazonCredsForTesting(r io.Writer) error {
     "Credentials": {
         "Expiration": "%s",
         "AccessKeyId": "ACCESS-KEY-ID",
-				"SessionToken": "SECRET-TOKEN",
+        "SessionToken": "SECRET-TOKEN",
         "SecretAccessKey": "SECRET-ACCESS-KEY"
     }
 }`, time.Now().Add(twelveH).Format(timeFormat))))
