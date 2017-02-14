@@ -9,16 +9,15 @@ import (
 )
 
 var (
-	curBranch = "" // cache current branch
-	gitRoot   = "" // cache absolute path to git root
+	CurBranch = "" // current branch
+	GitRoot   = "" // absolute path to git root
 )
 
-/* Print the name of the current branch of the git repo you're in
- */
-func CurBranch() (string, error) {
+// CurBranch returns the name of the current branch of the git repo you're in
+func initCurBranch() error {
 	// Use cached result if available
-	if len(curBranch) > 0 {
-		return curBranch, nil
+	if len(CurBranch) > 0 {
+		return nil
 	}
 
 	// Get current branch
@@ -26,44 +25,50 @@ func CurBranch() (string, error) {
 	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	curBranch, err := branchCmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("Could not get current git branch (\"%s\"):\n%s",
+		return fmt.Errorf("could not get current git branch (cmd: \"%s\"):\n%s",
 			cmdString, err)
 	}
-	return strings.TrimSpace(string(curBranch)), nil
+	CurBranch = strings.TrimSpace(string(curBranch))
+	return nil
 }
 
-/* Print the absolute path to the root of the git repo you're in
- */
-func GitRoot() (string, error) {
+// GitRoot returns the absolute path to the root of the git repo you're in
+func initGitRoot() error {
 	// Use cached result if available
-	if len(gitRoot) > 0 {
-		return gitRoot, nil
+	if len(GitRoot) > 0 {
+		return nil
 	}
-
-	// Get current branch
 	cmdString := "git rev-parse --show-toplevel"
 	getRootCmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	gitRoot, err := getRootCmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("Could not get root of current git repo (\"%s\"):\n%s",
-			cmdString, err)
+		return fmt.Errorf("could not get root of current git repo (cmd: \"%s\"):"+
+			"\n%s", cmdString, err)
 	}
-	return strings.TrimSpace(string(gitRoot)), nil
+	GitRoot = strings.TrimSpace(string(gitRoot))
+	return nil
 }
 
-/* Cobra commands that print the outputs of CurBranch() and GitRoot()
- */
+func InitGitInfo() error {
+	var err error = nil
+	for _, f := range []func() error{initCurBranch, initGitRoot} {
+		err = f()
+		if err != nil {
+			break
+		}
+	}
+	return err
+}
+
+// GitHelperCommands returns Cobra commands that print the outputs of
+// CurBranch() and GitRoot()
 func GitHelperCommands() []*cobra.Command {
 	return []*cobra.Command{
 		&cobra.Command{
 			Use:   "cur-branch",
 			Short: "Print the name of the current branch of the git repo you're in",
 			Run: boundedCommand(0, 0, func(args []string) error {
-				branch, err := CurBranch()
-				if err != nil {
-					return err
-				}
-				fmt.Println(branch)
+				fmt.Println(CurBranch)
 				return nil
 			}),
 		},
@@ -71,11 +76,7 @@ func GitHelperCommands() []*cobra.Command {
 			Use:   "root-path",
 			Short: "Print absolute path to the root of the git repo you're in",
 			Run: boundedCommand(0, 0, func(args []string) error {
-				root, err := GitRoot()
-				if err != nil {
-					return err
-				}
-				fmt.Println(root)
+				fmt.Println(GitRoot)
 				return nil
 			}),
 		},
