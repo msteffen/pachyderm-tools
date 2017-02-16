@@ -8,15 +8,34 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
+// magicStr is the default value of the --skip flag. This lets us distinguish
+// between setting --skip="" (which we interpret as "don't filter") vs not
+// setting --skip at all (which we interpret as "use the config- or client-level
+// filter")
+const magicStr = `d0559e2982835732f88960cc0d87ca25914ff308dcf9247363c7a36537e6be35`
+
 var (
 	branch   string // branch to diff against ("master" by default)
 	tool     string // tool to view the diff with ("meld" by default)
 	upstream bool   // If true, diff against the upstream version of this branch
+	skip     string // regex--instruct 'svp diff' to skip files that match
+)
+
+var (
+	// This error indicates that no commit in --branch contains 'path'
+	/* const */ branchFileNotExist = regexp.MustCompile(
+		"^fatal: Path '[[:graph:]]+' does not exist in '[[:word:]]+'$")
+
+	// This error indicates that no commit in --branch contains 'path', and also
+	// that 'path' is only in the working directory (i.e. no commits in CurBranch)
+	/* const */ workingDirOnly = regexp.MustCompile(
+		"^fatal: Path '[[:graph:]]+' exists on disk, but not in '[[:word:]]+'.$")
 )
 
 // meld shows the user the diff between 'files' and 'tmpfiles' with meld
@@ -29,8 +48,11 @@ func meld(tmpdir string, files []string, tmpfiles []*os.File) error {
 		cmd[(3*i)+1] = tmpfiles[i].Name()
 		cmd[(3*i)+2] = path.Join(GitRoot, files[i])
 	}
-	_, err := exec.Command("meld", cmd...).CombinedOutput()
-	return err
+	output, err := exec.Command("meld", cmd...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("(%v) %s", err, output)
+	}
+	return nil
 }
 
 // A struct that wraps all of the data structures needed to generate the
@@ -127,13 +149,66 @@ var diffFn = map[string]func(string, []string, []*os.File) error{
 	"vim":  vimdiff,
 }
 
+// makeDiffTempFile gets the the contents of 'file' in the git branch 'branch'
+// and then creates a temporary file F in 'tmpdir' and writes those contents
+// into F
+func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
+	// Create a temporary file
+	tmpfile, err := ioutil.TempFile(tmpdir, strings.Replace(file,
+		"/", "_", -1))
+	if err != nil {
+		return nil, fmt.Errorf("Could not create temporary file for \"%s\":\n%s",
+			file, err)
+	}
+	defer tmpfile.Close()
+
+	// cat contents of read file in 'master' to tmp file
+	cmd := []string{"git", "show", branch + ":" + file}
+	cmdString := strings.Join(cmd, " ")
+	gitCmd := exec.Command(cmd[0], cmd[1:]...)
+	stdoutPipe, err := gitCmd.StdoutPipe()
+	errMsg := bytes.NewBuffer(nil) // Error message from 'git show' will go here
+	stderrPipe, err := gitCmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("could not get stdout pipe from \"%s\": %s",
+			cmdString, err)
+	}
+	err = gitCmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("could not start command \"%s\": %s", cmdString, err)
+	}
+	_, err = io.Copy(tmpfile, stdoutPipe)
+	if err != nil {
+		return nil, fmt.Errorf("could not write contents of \"%s\" in 'master' "+
+			"to '%s': %s", file, tmpfile.Name(), err)
+	}
+	_, err = io.Copy(errMsg, stderrPipe)
+	if err != nil {
+		return nil, fmt.Errorf("could not copy error message from \"%s\": %s",
+			cmdString, err)
+	}
+	if err = gitCmd.Wait(); err != nil {
+		trimmedErr := bytes.TrimSpace(errMsg.Bytes())
+		// fmt.Printf("Received message: \"%s\"\n", trimmedErr)
+		// fmt.Printf("workingDirOnly.Match(errMsg.Bytes()): %t\n", workingDirOnly.Match(trimmedErr))
+		if branchFileNotExist.Match(trimmedErr) ||
+			workingDirOnly.Match(trimmedErr) {
+			// fmt.Println("returning empty tmpfile")
+			return tmpfile, nil // No error, but 'file' does not exist in 'branch'
+		}
+		return nil, fmt.Errorf("command \"%s\" did not run successfully: %s",
+			cmdString, err)
+	}
+	return tmpfile, nil
+}
+
 // diff is a cobra command that applies the diff tool to a given file, or to
 // all of the files changed in this workspace
 var diff = &cobra.Command{
 	Use:   "diff <filename>",
 	Short: "Diff files against some other branch of the pachyderm repo",
 	Run: unboundedCommand(func(args []string) error {
-		// log.SetFlags(log.LstdFlags | log.Lshortfile)
+		// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
 		if CurBranch == "master" && !upstream {
 			return fmt.Errorf("current branch is 'master'...cannot diff master " +
 				"against itself")
@@ -144,15 +219,31 @@ var diff = &cobra.Command{
 			branch = "origin/" + CurBranch
 		}
 
-		// Get list of files that have changed between 'master' and current
-		// branch, or files passed via args.
+		// Compile regex for skipping uninteresting files
+		skip2 := Config.DiffSkip
+		if skip != magicStr {
+			skip2 = skip
+		}
+		skipRe, err := regexp.Compile(Config.DiffSkip)
+		if err != nil {
+			return fmt.Errorf("could not compile regex \"%s\" for skipping files: %s",
+				skip2, err)
+		}
+
+		// Get either 1) list of files that have changed between 'master' and
+		// current branch, or 2) files passed via args.
 		var files []string
 		if len(args) == 0 {
-			var err error
-			files, err = ModifiedFiles(CurBranch, branch)
+			files0, err = ModifiedFiles(CurBranch, branch)
 			if err != nil {
 				return fmt.Errorf("could not get list of changed files "+
 					"(to diff):\n%s", err)
+			}
+			// Filter out uninteresting files
+			for _, file := range files0 {
+				if !skipRe.MatchString(file) {
+					files = append(files, file)
+				}
 			}
 		} else {
 			for _, arg := range args {
@@ -169,8 +260,7 @@ var diff = &cobra.Command{
 		}
 
 		// Create a temporary directory to contain copies of 'files' that will be
-		// diffed against (i.e. the contents of those files in the 'master'
-		// branch). Defer deletion of tmp dir.
+		// diffed against (i.e. the contents of 'files' in 'branch').
 		tmpdir, err := ioutil.TempDir("/tmp", "svp-diff-master-files-")
 		if err != nil {
 			return fmt.Errorf("Could not create temporary file: %s", err)
@@ -178,40 +268,13 @@ var diff = &cobra.Command{
 		defer os.RemoveAll(tmpdir)
 
 		// Populate the temporary directory with tmp files containing file
-		// contents from 'master'
+		// contents from 'branch'
 		tmpfiles := make([]*os.File, len(files))
 		for i, file := range files {
-			// Create a temporary file
-			tmpfiles[i], err = ioutil.TempFile(tmpdir, strings.Replace(file,
-				"/", "_", -1))
+			tmpfiles[i], err = makeDiffTempFile(branch, tmpdir, file)
 			if err != nil {
-				return fmt.Errorf("Could not create temporary file for \"%s\":\n%s",
-					file, err)
+				return err
 			}
-
-			// cat contents of read file in 'master' to tmp file
-			cmd := []string{"git", "show", branch + ":" + file}
-			cmdString := strings.Join(cmd, " ")
-			gitCmd := exec.Command(cmd[0], cmd[1:]...)
-			stdoutPipe, err := gitCmd.StdoutPipe()
-			if err != nil {
-				return fmt.Errorf("could not get stdout pipe from \"%s\": %s",
-					cmdString, err)
-			}
-			err = gitCmd.Start()
-			if err != nil {
-				return fmt.Errorf("could not start command \"%s\": %s", cmdString, err)
-			}
-			_, err = io.Copy(tmpfiles[i], stdoutPipe)
-			if err != nil {
-				return fmt.Errorf("could not write contents of \"%s\" in 'master' "+
-					"to tmpfiles[%d]: %s", file, i, err)
-			}
-			if err = gitCmd.Wait(); err != nil {
-				return fmt.Errorf("command \"%s\" did not run successfully: %s",
-					cmdString, err)
-			}
-			tmpfiles[i].Close()
 		}
 
 		// Run diff tool selected by user
@@ -238,6 +301,9 @@ func DiffCommand() *cobra.Command {
 	diff.PersistentFlags().BoolVar(&upstream, "upstream", false,
 		"If true, diff this branch against the upstream version of itself. At "+
 			"most one of --upstream and --branch should be set")
+	diff.PersistentFlags().StringVar(&skip, "skip", magicStr,
+		"A regex that is used to skip files encountered by 'svp diff' (e.g. "+
+			"vendored files or .gitignore)")
 	return diff
 }
 

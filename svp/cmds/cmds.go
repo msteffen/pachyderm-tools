@@ -17,6 +17,9 @@ import (
 var Config struct {
 	ClientDirectory string // The top-level directory containing all clients
 	DiffTool        string // The user's preferred tool for diffing branches
+	DiffSkip        string // Regex to let users skip certain files in svp diff
+	// TODO: DiffSkip should be settable per client (with maybe a global default?)
+	// (maybe a flag override allowed too?)
 }
 
 func useDefaultConfig() {
