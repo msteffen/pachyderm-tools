@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -189,11 +190,8 @@ func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 	}
 	if err = gitCmd.Wait(); err != nil {
 		trimmedErr := bytes.TrimSpace(errMsg.Bytes())
-		// fmt.Printf("Received message: \"%s\"\n", trimmedErr)
-		// fmt.Printf("workingDirOnly.Match(errMsg.Bytes()): %t\n", workingDirOnly.Match(trimmedErr))
 		if branchFileNotExist.Match(trimmedErr) ||
 			workingDirOnly.Match(trimmedErr) {
-			// fmt.Println("returning empty tmpfile")
 			return tmpfile, nil // No error, but 'file' does not exist in 'branch'
 		}
 		return nil, fmt.Errorf("command \"%s\" did not run successfully: %s",
@@ -234,7 +232,7 @@ var diff = &cobra.Command{
 		// current branch, or 2) files passed via args.
 		var files []string
 		if len(args) == 0 {
-			files0, err = ModifiedFiles(CurBranch, branch)
+			files0, err := ModifiedFiles(CurBranch, branch)
 			if err != nil {
 				return fmt.Errorf("could not get list of changed files "+
 					"(to diff):\n%s", err)
@@ -258,6 +256,7 @@ var diff = &cobra.Command{
 			return fmt.Errorf("no differing files found between \"%s\" and \"%s\"",
 				CurBranch, branch)
 		}
+		sort.Strings(files)
 
 		// Create a temporary directory to contain copies of 'files' that will be
 		// diffed against (i.e. the contents of 'files' in 'branch').
