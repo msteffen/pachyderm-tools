@@ -3,7 +3,6 @@ package cmds
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -56,46 +55,29 @@ func meld(tmpdir string, files []string, tmpfiles []*os.File) error {
 	return nil
 }
 
-// A struct that wraps all of the data structures needed to generate the
-// vimscript file used in 'vimdiff()'. It's used to chain together all of the
-// io that we do to write out the script, and collect any errors at the end
-type vimscriptWriter struct {
-	buf *bytes.Buffer // 'buf' will contain the vim script
-	out *os.File      // 'out' is the vimscript file -- the eventual target of 'buf'
-	err error         // 'err' is where any errors are accumulated
-}
+// writeToTmpfile write the data in 'contents' to a new tempfile that it creates
+// with the prefix  'prefix' in the directory 'dir'. The file is closed, and the
+// name of the new file is returned (if it was created, along with any errors)
+func writeToTmpfile(dir, prefix string, contents []byte) (string, error) {
+	// Create the vimscript tempfile
+	vimscript, err := ioutil.TempFile(dir, prefix)
+	if err != nil {
+		return "", fmt.Errorf("could not create vimscript tempfile: %s", err)
+	}
+	name := vimscript.Name() // 'vimscript' now exists on disk; must return 'name'
 
-// writeString writes 's' to 'w.buf'
-func (w *vimscriptWriter) writeString(s string) {
-	if w.err != nil {
-		return
+	// Write contents to 'vimscript'
+	_, err = vimscript.Write(contents)
+	if err != nil {
+		return name, fmt.Errorf("could not write out vimscript: %s", err)
 	}
-	if _, err := w.buf.WriteString(s); err != nil {
-		w.err = fmt.Errorf("could not write out vimscript command \"%s\":\n%s", s,
-			err)
-	}
-}
 
-// finish writes 'w.buf' to 'w.out' and closes 'w.out'
-func (w *vimscriptWriter) finish() {
-	if w.err != nil {
-		return
+	// close 'vimscript
+	err = vimscript.Close()
+	if err != nil {
+		return name, fmt.Errorf("could not close vimscript: %s", err)
 	}
-	if _, err := w.out.Write(w.buf.Bytes()); err != nil {
-		w.err = fmt.Errorf("could not write out vimscript file \"%s\":\n%s",
-			w.out.Name(), err)
-		return
-	}
-	if err := w.out.Close(); err != nil {
-		w.err = fmt.Errorf("could not close vimscript file \"%s\": %s",
-			w.out.Name(), err)
-		return
-	}
-}
-
-// err returns any errors collected by 'w'
-func (w *vimscriptWriter) getErr() error {
-	return w.err
+	return name, nil
 }
 
 // vimdiff shows the user the diff between 'files' and 'tmpfiles' with vimdiff
@@ -110,28 +92,25 @@ func vimdiff(tmpdir string, files []string, tmpfiles []*os.File) error {
 
 	// Generate a vim script to open all of the modified files in this branch
 	// as vim tabs
-	vimscript, err := ioutil.TempFile(tmpdir, "vim-diffscript")
-	defer os.Remove(vimscript.Name()) // delete generated vimscript file when done
-	w := vimscriptWriter{
-		buf: bytes.NewBuffer(nil),
-		out: vimscript,
-		err: nil,
-	}
-	w.writeString("set diffopt=filler,vertical\n")
-	w.writeString("edit " + path.Join(GitRoot, files[0]) + "\n")
-	w.writeString("diffsplit " + tmpfiles[0].Name() + "\n")
+	buf := bytes.Buffer{} // bytes.Buffer.Write() does not return errors
+	buf.WriteString(fmt.Sprintf("set diffopt=filler,vertical\n"))
+	buf.WriteString(fmt.Sprintf("edit %s\n", path.Join(GitRoot, files[0])))
+	buf.WriteString(fmt.Sprintf("diffsplit %s\n", tmpfiles[0].Name()))
 	for i := 1; i < len(files); i++ {
-		w.writeString("tabe " + path.Join(GitRoot, files[i]) + "\n")
-		w.writeString("diffsplit " + tmpfiles[i].Name() + "\n")
+		buf.WriteString(fmt.Sprintf("tabe %s\n", path.Join(GitRoot, files[i])))
+		buf.WriteString(fmt.Sprintf("diffsplit %s\n", tmpfiles[i].Name()))
 	}
-	w.writeString("tabfirst\n")
-	w.finish()
-	if w.getErr() != nil {
-		return w.getErr()
+	buf.WriteString("tabfirst\n")
+	name, err := writeToTmpfile(tmpdir, "vim-diffscript", buf.Bytes())
+	if len(name) > 0 {
+		defer os.Remove(name) // delete vimscript file (even if err != nil)
+	}
+	if err != nil {
+		return err
 	}
 
 	// Run 'vim' subprocess, with the generated vim script as input
-	cmd := exec.Command("vim", "-S", vimscript.Name())
+	cmd := exec.Command("vim", "-S", name)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	// open /dev/tty for vim; see [note] at the end
@@ -150,9 +129,10 @@ var diffFn = map[string]func(string, []string, []*os.File) error{
 	"vim":  vimdiff,
 }
 
-// makeDiffTempFile gets the the contents of 'file' in the git branch 'branch'
-// and then creates a temporary file F in 'tmpdir' and writes those contents
-// into F
+// makeDiffTempFile:
+// 1) gets the the contents of 'file' in the git branch 'branch'
+// 2) creates a temporary file 'tmpdir'
+// 3) write the data from (1) into file from (2)
 func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 	// Create a temporary file
 	tmpfile, err := ioutil.TempFile(tmpdir, strings.Replace(file,
@@ -164,38 +144,15 @@ func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 	defer tmpfile.Close()
 
 	// cat contents of read file in 'master' to tmp file
-	cmd := []string{"git", "show", branch + ":" + file}
-	cmdString := strings.Join(cmd, " ")
-	gitCmd := exec.Command(cmd[0], cmd[1:]...)
-	stdoutPipe, err := gitCmd.StdoutPipe()
-	errMsg := bytes.NewBuffer(nil) // Error message from 'git show' will go here
-	stderrPipe, err := gitCmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("could not get stdout pipe from \"%s\": %s",
-			cmdString, err)
-	}
-	err = gitCmd.Start()
-	if err != nil {
-		return nil, fmt.Errorf("could not start command \"%s\": %s", cmdString, err)
-	}
-	_, err = io.Copy(tmpfile, stdoutPipe)
-	if err != nil {
-		return nil, fmt.Errorf("could not write contents of \"%s\" in 'master' "+
-			"to '%s': %s", file, tmpfile.Name(), err)
-	}
-	_, err = io.Copy(errMsg, stderrPipe)
-	if err != nil {
-		return nil, fmt.Errorf("could not copy error message from \"%s\": %s",
-			cmdString, err)
-	}
-	if err = gitCmd.Wait(); err != nil {
-		trimmedErr := bytes.TrimSpace(errMsg.Bytes())
-		if branchFileNotExist.Match(trimmedErr) ||
-			workingDirOnly.Match(trimmedErr) {
+	op := StartOp()
+	op.OutputTo(tmpfile)
+	op.Run("git", "show", branch+":"+file)
+	if op.LastError() != nil {
+		if branchFileNotExist.Match(op.LastErrorMsg()) ||
+			workingDirOnly.Match(op.LastErrorMsg()) {
 			return tmpfile, nil // No error, but 'file' does not exist in 'branch'
 		}
-		return nil, fmt.Errorf("command \"%s\" did not run successfully: %s",
-			cmdString, err)
+		return nil, op.DetailedError()
 	}
 	return tmpfile, nil
 }

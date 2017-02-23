@@ -91,8 +91,8 @@ func RootCmd() *cobra.Command {
 
 	// Initialize git information (current branch, etc)
 	if err := InitGitInfo(); err != nil {
-		fmt.Errorf("could not get info about git repo:\n%s\n(make sure this "+
-			"command is being run from inside a git repo", err.Error)
+		fmt.Fprintf(os.Stderr, "could not get info about git repo:\n%s\n(make sure "+
+			"this command is being run from inside a git repo)\n", err.Error())
 		os.Exit(1)
 	}
 
