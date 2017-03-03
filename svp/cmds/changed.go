@@ -135,6 +135,16 @@ func ChangedFilesCommand() *cobra.Command {
 		Use:   "changed",
 		Short: "List the files that have changed between this branch and master",
 		Run: boundedCommand(0, 0, func(args []string) error {
+			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
+			if CurBranch == "master" && !upstream {
+				return fmt.Errorf("current branch is 'master'...cannot diff master " +
+					"against itself")
+			} else if branch != "master" && upstream {
+				return fmt.Errorf("cannot set both --branch and --upstream")
+			}
+			if upstream {
+				branch = "origin/" + CurBranch
+			}
 			files, err := ModifiedFiles(CurBranch, branch)
 			if err != nil {
 				return err
@@ -147,5 +157,10 @@ func ChangedFilesCommand() *cobra.Command {
 	// 'branch' is declared in diff.go
 	changed.PersistentFlags().StringVarP(&branch, "branch", "b", "master",
 		"The branch to diff against")
+	// 'upstream' is declared in diff.go
+	changed.PersistentFlags().BoolVar(&upstream, "upstream", false,
+		"If true, display files that have changes relative to the upstream "+
+			"version of the current branch, rather than master. At most one of "+
+			"--upstream and --branch should be set")
 	return changed
 }
