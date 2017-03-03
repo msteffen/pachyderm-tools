@@ -1,6 +1,8 @@
 package cmds
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -18,8 +20,8 @@ type dircreator struct {
 	err error
 }
 
-// Creates a directory, as part of a chain of such calls. If a previous call to
-// mkdir has failed, this is a no-op.
+// mkdir creates a directory, as part of a chain of such calls. If a previous
+// call to mkdir has failed, this is a no-op.
 func (f *dircreator) mkdir(path string, mode os.FileMode, desc string) {
 	if f.err != nil {
 		return
@@ -39,7 +41,7 @@ func (f *dircreator) mkdir(path string, mode os.FileMode, desc string) {
 // Pachyderm in the pre-configured clients directory, and sets it up to begin
 // working
 var newClient = &cobra.Command{
-	Use:   "newclient",
+	Use:   "new-client",
 	Short: "Create a new client for working on Pachyderm",
 	Run: boundedCommand(1, 1, func(args []string) error {
 		clientname := args[0]
@@ -64,17 +66,51 @@ var newClient = &cobra.Command{
 			return f.err
 		}
 
-		// Pulls the pachyderm repo into the client directory
+		// Pull the pachyderm repo into the client directory
 		os.Setenv("GOPATH", clientpath)
 		os.Chdir(clientpath)
 		fmt.Println("Fetching Pachyderm repo...")
 		op := StartOp()
 		op.Run("go", "get", "github.com/pachyderm/pachyderm")
 		os.Chdir(path.Join(clientpath, "src/github.com/pachyderm/pachyderm"))
+
+		// Create a git branch matching the clientname
+		// TODO(msteffen): let the user specify the branch, in case you want to have
+		// multiple clients for the same branch
 		op.Run("git", "checkout", "-b", clientname)
 		if op.LastError() != nil {
 			return fmt.Errorf("couldn't create client branch:\n%s", op.DetailedError())
 		}
+
+		// Update .git/config so that the 'origin' remote repo uses ssh instead of http
+		fmt.Println("Updating .git/config...")
+		stat, err := os.Stat("./.git/config")
+		if err != nil {
+			return fmt.Errorf("could not stat .git/config to update origin: %s", err)
+		}
+		gitconf, err := os.OpenFile("./.git/config", os.O_RDWR, 0664)
+		if err != nil {
+			return fmt.Errorf("could not open .git/config to update origin: %s", err)
+		}
+		// (we're replacing one line of config with another that's the same length)
+		out := bytes.NewBuffer(make([]byte, stat.Size()))
+		scanner := bufio.NewScanner(gitconf)
+		for scanner.Scan() {
+			if scanner.Text() == "url = https://github.com/pachyderm/pachyderm" {
+				out.Write([]byte("url = git@github.com:pachyderm/pachyderm.git"))
+			} else {
+				out.Write(scanner.Bytes())
+			}
+			out.WriteByte('\n')
+		}
+		// Replace gitconf with new contents
+		if _, err := gitconf.WriteAt(out.Bytes(), 0); err != nil {
+			return fmt.Errorf("could not overwrite .git/config: %s", err)
+		}
+		if err := gitconf.Close(); err != nil {
+			return fmt.Errorf("could not close .git/config: %s", err)
+		}
+
 		return nil
 	}),
 }
