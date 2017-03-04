@@ -67,6 +67,8 @@ var newClient = &cobra.Command{
 		}
 
 		// Pull the pachyderm repo into the client directory
+		// TODO: This should be copied instead of downloaded every time. This takes
+		// several seconds to finish
 		os.Setenv("GOPATH", clientpath)
 		os.Chdir(clientpath)
 		fmt.Println("Fetching Pachyderm repo...")
@@ -76,7 +78,7 @@ var newClient = &cobra.Command{
 
 		// Create a git branch matching the clientname
 		// TODO(msteffen): let the user specify the branch, in case you want to have
-		// multiple clients for the same branch
+		// multiple clients for the same non-master branch
 		op.Run("git", "checkout", "-b", clientname)
 		if op.LastError() != nil {
 			return fmt.Errorf("couldn't create client branch:\n%s", op.DetailedError())
@@ -93,11 +95,11 @@ var newClient = &cobra.Command{
 			return fmt.Errorf("could not open .git/config to update origin: %s", err)
 		}
 		// (we're replacing one line of config with another that's the same length)
-		out := bytes.NewBuffer(make([]byte, stat.Size()))
+		out := bytes.NewBuffer(make([]byte, 0, stat.Size()))
 		scanner := bufio.NewScanner(gitconf)
 		for scanner.Scan() {
-			if scanner.Text() == "url = https://github.com/pachyderm/pachyderm" {
-				out.Write([]byte("url = git@github.com:pachyderm/pachyderm.git"))
+			if scanner.Text() == "\turl = https://github.com/pachyderm/pachyderm" {
+				out.Write([]byte("\turl = git@github.com:pachyderm/pachyderm.git"))
 			} else {
 				out.Write(scanner.Bytes())
 			}
@@ -107,8 +109,19 @@ var newClient = &cobra.Command{
 		if _, err := gitconf.WriteAt(out.Bytes(), 0); err != nil {
 			return fmt.Errorf("could not overwrite .git/config: %s", err)
 		}
+		if err := gitconf.Truncate(int64(out.Len())); err != nil {
+			return fmt.Errorf("could not truncate .git/config: %s", err)
+		}
 		if err := gitconf.Close(); err != nil {
 			return fmt.Errorf("could not close .git/config: %s", err)
+		}
+
+		// Get vim-go set up in the new client
+		// TODO: These should just be copied instead of downloaded every time. This
+		// takes like 30 seconds to finish
+		op.Run("vim", "-c", "GoInstallBinaries", "-c", "q", clientname)
+		if op.LastError() != nil {
+			return fmt.Errorf("couldn't create client branch:\n%s", op.DetailedError())
 		}
 
 		return nil
