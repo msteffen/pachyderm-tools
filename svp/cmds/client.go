@@ -119,6 +119,7 @@ var newClient = &cobra.Command{
 		// Get vim-go set up in the new client
 		// TODO: These should just be copied instead of downloaded every time. This
 		// takes like 30 seconds to finish
+		fmt.Println("Installing vim-go binaries...")
 		op.Run("vim", "-c", "GoInstallBinaries", "-c", "q", clientname)
 		if op.LastError() != nil {
 			return fmt.Errorf("couldn't create client branch:\n%s", op.DetailedError())
