@@ -82,39 +82,12 @@ func (o *Op) Run(inputargs ...string) {
 	// Create new exec.Command
 	o.args = inputargs
 	cmd := exec.Command(o.args[0], o.args[1:]...)
-
-	// get command's stdout and stderr pipes, to copy them to byte buffers
-	var stdoutPipe, stderrPipe io.Reader
-	stderrPipe, o.err = cmd.StderrPipe()
-	if o.err != nil {
-		o.action = "could not get stderr pipe"
-		return
-	}
+	cmd.Stderr = &o.errMsg
 	if o.output != nil {
-		stdoutPipe, o.err = cmd.StdoutPipe()
-		if o.err != nil {
-			o.action = "could not get stdout pipe"
-			return
-		}
+		cmd.Stdout = o.output
 	}
-
-	// start command, and actually io.Copy stdout and stderr from cmd to buffers
-	if o.err = cmd.Start(); o.err != nil {
-		o.action = "could not start"
-		return
-	}
-	if _, o.err = io.Copy(&o.errMsg, stderrPipe); o.err != nil {
-		o.action = "could not copy stderr"
-		return
-	}
-	if o.output != nil {
-		if _, o.err = io.Copy(o.output, stdoutPipe); o.err != nil {
-			o.action = "could not copy stdout"
-			return
-		}
-	}
-	if o.err = cmd.Wait(); o.err != nil {
-		o.action = "could not wait for command to finish"
+	if o.err = cmd.Run(); o.err != nil {
+		o.action = "could not run command"
 		return
 	}
 }
