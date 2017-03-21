@@ -14,6 +14,7 @@ type Op struct {
 	action string       // Updated as we run the command, for reporting errors
 	err    error        // The error oject returned by exec.Command (or some such)
 	errMsg bytes.Buffer // The text written by the last command to stderr
+	input  io.Reader    // The
 	output io.Writer    // The text written by the last command to stdout (if set)
 }
 
@@ -44,7 +45,8 @@ func (o *Op) DetailedError() error {
 	}
 }
 
-// If called, Op will collect the output on stdout commands it runs
+// CollectStdOut directs 'o' to collect the output (from stdout) of commands it
+// runs
 func (o *Op) CollectStdOut() {
 	o.output = &bytes.Buffer{}
 }
@@ -58,12 +60,19 @@ func (o *Op) Output() string {
 	return ""
 }
 
-// If called, Op will write the output to 'w'
-func (o *Op) OutputTo(w io.Writer) {
+// OutputTo directs 'o' to pipe the output of subsequent commands to 'w'.
+func (o *Op) OutputTo(w io.Writer) *Op {
 	o.output = w
+	return o
 }
 
-// Run a command (assuming no previous commands have failed)
+// InputFrom directs 'o' to pipe input from 'r' to subsequent cmds stdin
+func (o *Op) InputFrom(r io.Reader) *Op {
+	o.input = r
+	return o
+}
+
+// Run runs a command (assuming no previous commands have failed)
 func (o *Op) Run(inputargs ...string) {
 	// Only run while the whole Op is still successful
 	if o.err != nil {
@@ -83,6 +92,9 @@ func (o *Op) Run(inputargs ...string) {
 	o.args = inputargs
 	cmd := exec.Command(o.args[0], o.args[1:]...)
 	cmd.Stderr = &o.errMsg
+	if o.input != nil {
+		cmd.Stdin = o.input
+	}
 	if o.output != nil {
 		cmd.Stdout = o.output
 	}
