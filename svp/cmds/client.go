@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"golang.org/x/sync/errgroup"
-	// "os/exec"
 	"path"
 	"regexp"
 
@@ -77,14 +76,15 @@ var newClient = &cobra.Command{
 		os.Chdir(clientpath)
 		// Install vim-go binaries in a separate goroutine (slow)
 		eg.Go(func() error {
-			// op := StartOp()
-			// fmt.Println("Beginning to install vim-go binaries...")
-			// op.Run("vim", "-c", ":GoUpdateBinaries", "-c", ":q")
-			// if op.LastError() != nil {
-			// 	return fmt.Errorf("couldn't install go binaries:\n%s", op.DetailedError())
-			// }
-			// fmt.Println("vim-go binaries successfully installed")
-			// return nil
+			fmt.Println("Beginning to install vim-go binaries...")
+			op := StartOp()
+			op.OutputTo(os.Stdout)
+			op.Run("vim", "-c", ":GoUpdateBinaries", "-c", ":qa")
+			if op.LastError() != nil {
+				return fmt.Errorf("couldn't install go binaries:\n%s", op.DetailedError())
+			}
+			fmt.Println("vim-go binaries successfully installed")
+			return nil
 			return nil
 		})
 
@@ -142,39 +142,6 @@ var newClient = &cobra.Command{
 
 		// Return once both operations are finished
 		eg.Wait()
-
-		// cmd := exec.Command("vim", "-c", ":GoUpdateBinaries", "-c", "q")
-		// cmd.Stdout = os.Stdout
-		// cmd.Stderr = os.Stderr
-		// // open /dev/tty for vim; see [note] at the end
-		// if tty, err := os.Open("/dev/tty"); err == nil {
-		// 	cmd.Stdin = tty
-		// } else {
-		// 	fmt.Fprintf(os.Stderr, "could not use /dev/tty as vim input (you may have "+
-		// 		"to run 'reset' afterwards: %s\n", err)
-		// }
-		// err := cmd.Run()
-		// return err
-		op := StartOp()
-		d, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		fmt.Println("wd: ", d)
-		log, err := os.Create("/home/mjs/clients/vimout.txt")
-		if err != nil {
-			return err
-		}
-		op.OutputTo(log)
-		// tty, err := os.Open("/dev/tty") // vim crashes unless its input is a tty
-		// op.InputFrom(tty)
-		fmt.Println("Beginning to install vim-go binaries...")
-		op.Run("vim", "-c", "GoUpdateBinaries", "-c", "qa")
-		// op.Run("vim", "-c", "q")
-		if op.LastError() != nil {
-			return fmt.Errorf("couldn't install go binaries:\n%s", op.DetailedError())
-		}
-		fmt.Println("vim-go binaries successfully installed")
 		return nil
 	}),
 }
