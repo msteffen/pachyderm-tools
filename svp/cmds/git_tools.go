@@ -5,14 +5,15 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/msteffen/pachyderm-tools/op"
 	"github.com/spf13/cobra"
 )
 
 var (
-	// Information about this client's git repo. If 'svp' is run outside a git
-	// repo, both of these will be the empty string
+	// CurBranch is the name of the git branch that is currently checked out
 	CurBranch string
-	GitRoot   string
+	// GitRoot is the path to the root of the current git repo
+	GitRoot string
 
 	// This error (from the 'git' CLI) means 'svp' was not run from a git repo
 	/*const */ notAGitRepo = regexp.MustCompile("^fatal: Not a git repository")
@@ -21,7 +22,7 @@ var (
 // CurBranch returns the name of the current branch of the git repo you're in
 func initCurBranch() error {
 	// Get current branch
-	op := StartOp()
+	op := op.StartOp()
 	op.CollectStdOut()
 	op.Run("git", "rev-parse", "--abbrev-ref", "HEAD")
 	if op.LastError() != nil {
@@ -34,7 +35,7 @@ func initCurBranch() error {
 
 // GitRoot returns the absolute path to the root of the git repo you're in
 func initGitRoot() error {
-	op := StartOp()
+	op := op.StartOp()
 	op.CollectStdOut()
 	op.Run("git", "rev-parse", "--show-toplevel")
 	if op.LastError() != nil {
@@ -48,8 +49,10 @@ func initGitRoot() error {
 	return nil
 }
 
+// InitGitInfo detects if svp is being run from inside a git repo, and if so,
+// runs a collection of git commands to learn about it.
 func InitGitInfo() error {
-	var err error = nil
+	var err error
 	for i, f := range []func() error{initGitRoot, initCurBranch} {
 		if i > 0 && GitRoot == "" {
 			break // we're not in a git repo; quit early

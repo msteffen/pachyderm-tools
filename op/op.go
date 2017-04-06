@@ -1,4 +1,4 @@
-package cmds
+package op
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+// Op tracks internal state of a sequence of bash commands that is intended to
+// be run together.
 type Op struct {
 	args []string // The last command (updated after each call to Run())
 
@@ -18,6 +20,7 @@ type Op struct {
 	output io.Writer    // The text written by the last command to stdout (if set)
 }
 
+// StartOp creates and initializes a new Op
 func StartOp() *Op {
 	return &Op{}
 }
@@ -34,15 +37,15 @@ func (o *Op) LastErrorMsg() []byte {
 	return bytes.TrimSpace(o.errMsg.Bytes())
 }
 
-// Similar to LastError(), this produces an error with a detailed error message
+// DetailedError is similar to LastError(), but it produces a more detailed
+// error message
 func (o *Op) DetailedError() error {
 	if o.errMsg.Len() > 0 {
 		return fmt.Errorf("%s (command: \"%s\"):\n%s\n(%s)", o.action,
 			strings.Join(o.args, " "), o.errMsg.Bytes(), o.err.Error())
-	} else {
-		return fmt.Errorf("%s (command: \"%s\"):\n(%s)", o.action,
-			strings.Join(o.args, " "), o.err.Error())
 	}
+	return fmt.Errorf("%s (command: \"%s\"):\n(%s)", o.action,
+		strings.Join(o.args, " "), o.err.Error())
 }
 
 // CollectStdOut directs 'o' to collect the output (from stdout) of commands it
@@ -51,6 +54,8 @@ func (o *Op) CollectStdOut() {
 	o.output = &bytes.Buffer{}
 }
 
+// Output returns text emitted by the last command on stdout if CollectStdOut()
+// was called before it ran (otherwise it returns the empty string).
 func (o *Op) Output() string {
 	if o.output != nil {
 		if buf, ok := o.output.(*bytes.Buffer); ok {

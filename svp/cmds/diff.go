@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/msteffen/pachyderm-tools/op"
 	"github.com/spf13/cobra"
 )
 
@@ -144,7 +145,7 @@ func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 	defer tmpfile.Close()
 
 	// cat contents of read file in 'master' to tmp file
-	op := StartOp()
+	op := op.StartOp()
 	op.OutputTo(tmpfile)
 	op.Run("git", "show", branch+":"+file)
 	if op.LastError() != nil {
@@ -240,10 +241,9 @@ var diff = &cobra.Command{
 				return fmt.Errorf("could not run diff tool %s: %s", tool, err)
 			}
 			return nil
-		} else {
-			return fmt.Errorf("did not recognize diff command %s; must be \"vim\" " +
-				"or \"meld\"")
 		}
+		return fmt.Errorf("did not recognize diff command %s; must be \"vim\" " +
+			"or \"meld\"")
 	}),
 }
 

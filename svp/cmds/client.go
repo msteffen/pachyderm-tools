@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"os"
-
 	"golang.org/x/sync/errgroup"
+	"os"
 	"path"
 	"regexp"
 
+	"github.com/msteffen/pachyderm-tools/op"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +77,7 @@ var newClient = &cobra.Command{
 		// Install vim-go binaries in a separate goroutine (slow)
 		eg.Go(func() error {
 			fmt.Println("Beginning to install vim-go binaries...")
-			op := StartOp()
+			op := op.StartOp()
 			op.OutputTo(os.Stdout)
 			op.Run("vim", "-c", ":GoUpdateBinaries", "-c", ":qa")
 			if op.LastError() != nil {
@@ -91,7 +91,7 @@ var newClient = &cobra.Command{
 		// Get the pachyderm repo (slow) & update .git/config in separate goroutine
 		eg.Go(func() error {
 			fmt.Println("Beginning to fetch Pachyderm repo...")
-			op := StartOp()
+			op := op.StartOp()
 			op.Run("go", "get", "github.com/pachyderm/pachyderm")
 			fmt.Println("pachyderm repo fetched")
 			os.Chdir(path.Join(clientpath, "src/github.com/pachyderm/pachyderm"))
