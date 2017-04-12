@@ -45,7 +45,7 @@ func unboundedCommand(f command) func(*cobra.Command, []string) {
 // TODO print usage
 func boundedCommand(minargs, maxargs int, f command) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, args []string) {
-		var err error = nil
+		var err error
 		argc := len(args)
 		switch {
 		case minargs > maxargs:
@@ -70,6 +70,8 @@ func boundedCommand(minargs, maxargs int, f command) func(*cobra.Command, []stri
 	}
 }
 
+// RootCmd returns the root cobra command (off of which all other svp commands
+// branch).
 func RootCmd() *cobra.Command {
 	// Parse config and initialize config fields
 	configpath := path.Join(os.Getenv("HOME"), ".svpconfig")
@@ -105,6 +107,8 @@ func RootCmd() *cobra.Command {
 	for _, cmd := range GitHelperCommands() {
 		root.AddCommand(cmd)
 	}
-	root.AddCommand(NewClientCommand())
+	for _, cmd := range ClientCommands() {
+		root.AddCommand(cmd)
+	}
 	return root
 }
