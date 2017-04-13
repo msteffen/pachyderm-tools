@@ -8,18 +8,64 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 
 	"github.com/msteffen/pachyderm-tools/op"
 	"github.com/spf13/cobra"
 )
 
-const fileRegex = "[a-zA-Z0-9_.-]+" // For printing in errors
-var /* const */ fileMatcher = regexp.MustCompile(fileRegex)
+const clientNameRegex = "[a-zA-Z0-9_.-]+" // For printing in errors
+var /* const */ clientMatcher = regexp.MustCompile(clientNameRegex)
 
 // dircreator is basically an error accumulator for making directories. You can
 // call dircreator.mkdir() over and over, and only check errors at the end
 type dircreator struct {
 	err error
+}
+
+// replaceLine replaces any occurances of the text 'needle' in the file
+// 'filePath' with the text in 'replace'. Note that 'needle' must not cross line
+// boundaries
+func replaceLine(filePath, needle, replace string) error {
+	// stat 'filePath'
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("could not stat '%s': %s", filePath, err)
+	}
+	out := bytes.NewBuffer(make([]byte, 0, stat.Size()))
+
+	// if 'filePath' exists, open it
+	file, err := os.OpenFile(filePath, os.O_RDWR, 0664)
+	if err != nil {
+		return fmt.Errorf("could not open '%s': %s", filePath, err)
+	}
+
+	// Scan the lines of 'file' and replace any matches of 'needle' with 'replace'
+	// (write the new contents to 'out')
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if idx := strings.Index(line, needle); idx > 0 {
+			out.WriteString(line[:idx])
+			out.WriteString(replace)
+			out.WriteString(line[idx+len(needle):])
+		} else {
+			out.Write(scanner.Bytes())
+		}
+		out.WriteRune('\n')
+	}
+
+	// write 'out' into file and close it.
+	if _, err := file.WriteAt(out.Bytes(), 0); err != nil {
+		return fmt.Errorf("could not overwrite '%s': %s", filePath, err)
+	}
+	if err := file.Truncate(int64(out.Len())); err != nil {
+		return fmt.Errorf("could not truncate '%s': %s", filePath, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("could not close '%s': %s", filePath, err)
+	}
+	return nil
 }
 
 // mkdir creates a directory, as part of a chain of such calls. If a previous
@@ -53,8 +99,8 @@ var newClient = &cobra.Command{
 		f := dircreator{}
 		f.mkdir(Config.ClientDirectory, 077, "parent directory of clients")
 		clientpath := path.Join(Config.ClientDirectory, clientname)
-		if !fileMatcher.MatchString(clientpath) {
-			return fmt.Errorf("client name must match %s but was %s", fileRegex,
+		if !clientMatcher.MatchString(clientpath) {
+			return fmt.Errorf("client name must match %s but was %s", clientNameRegex,
 				clientpath)
 		}
 		if _, err := os.Stat(clientpath); !os.IsNotExist(err) {
@@ -107,37 +153,14 @@ var newClient = &cobra.Command{
 			// Update .git/config so that the 'origin' remote repo uses ssh instead
 			// of http
 			fmt.Println("Updating .git/config...")
-			stat, err := os.Stat("./.git/config")
-			if err != nil {
-				return fmt.Errorf("could not stat .git/config to update origin: %s", err)
+			if err := replaceLine("./.git/config",
+				"url = https://github.com/pachyderm/pachyderm",
+				"url = git@github.com:pachyderm/pachyderm.git"); err != nil {
+				return fmt.Errorf("could not update .git/config: %s", err)
 			}
-			gitconf, err := os.OpenFile("./.git/config", os.O_RDWR, 0664)
-			if err != nil {
-				return fmt.Errorf("could not open .git/config to update origin: %s", err)
-			}
-			// (we're replacing one line of config with another that's the same
-			// length)
-			out := bytes.NewBuffer(make([]byte, 0, stat.Size()))
-			scanner := bufio.NewScanner(gitconf)
-			for scanner.Scan() {
-				if scanner.Text() == "\turl = https://github.com/pachyderm/pachyderm" {
-					out.Write([]byte("\turl = git@github.com:pachyderm/pachyderm.git"))
-				} else {
-					out.Write(scanner.Bytes())
-				}
-				out.WriteByte('\n')
-			}
-			// Replace gitconf with new contents
-			if _, err := gitconf.WriteAt(out.Bytes(), 0); err != nil {
-				return fmt.Errorf("could not overwrite .git/config: %s", err)
-			}
-			if err := gitconf.Truncate(int64(out.Len())); err != nil {
-				return fmt.Errorf("could not truncate .git/config: %s", err)
-			}
-			if err := gitconf.Close(); err != nil {
-				return fmt.Errorf("could not close .git/config: %s", err)
-			}
-			return nil
+			return replaceLine("Dockerfile",
+				"https://get.docker.com/builds/Linux/x86_64/docker-1.12.1.tgz",
+				"https://get.docker.com/builds/Linux/x86_64/docker-1.11.1.tgz")
 		})
 
 		// Return once both operations are finished
