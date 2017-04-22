@@ -68,6 +68,29 @@ func replaceLine(filePath, needle, replace string) error {
 	return nil
 }
 
+// addLine appends 'line' to the file at  'filePath'.
+func addLine(filePath, line string) error {
+	// stat 'filePath'
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("could not stat '%s': %s", filePath, err)
+	}
+	// if 'filePath' exists, open it
+	file, err := os.OpenFile(filePath, os.O_APPEND, 0664)
+	if err != nil {
+		return fmt.Errorf("could not open '%s': %s", filePath, err)
+	}
+
+	// write 'out' into file and close it.
+	if _, err := file.WriteString(line); err != nil {
+		return fmt.Errorf("could append to '%s': %s", filePath, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("could not close '%s': %s", filePath, err)
+	}
+	return nil
+}
+
 // mkdir creates a directory, as part of a chain of such calls. If a previous
 // call to mkdir has failed, this is a no-op.
 func (f *dircreator) mkdir(path string, mode os.FileMode, desc string) {
@@ -158,9 +181,17 @@ var newClient = &cobra.Command{
 				"url = git@github.com:pachyderm/pachyderm.git"); err != nil {
 				return fmt.Errorf("could not update .git/config: %s", err)
 			}
-			return replaceLine("Dockerfile",
+			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
+			if err := addLine(".gitignore", gitIgnoreAdditions); err != nil {
+				return fmt.Errorf("could not update .gitignore: %s", err)
+			}
+			fmt.Println("Adding to .gitignore:\n%s\n", gitIgnoreAdditions)
+			if err := replaceLine("Dockerfile",
 				"https://get.docker.com/builds/Linux/x86_64/docker-1.12.1.tgz",
-				"https://get.docker.com/builds/Linux/x86_64/docker-1.11.1.tgz")
+				"https://get.docker.com/builds/Linux/x86_64/docker-1.11.1.tgz"); err != nil {
+				return fmt.Errorf("could not update Dockerfile: %s", err)
+			}
+			return nil
 		})
 
 		// Return once both operations are finished
