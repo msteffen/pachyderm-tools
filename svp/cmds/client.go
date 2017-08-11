@@ -70,11 +70,6 @@ func replaceLine(filePath, needle, replace string) error {
 
 // addLine appends 'line' to the file at  'filePath'.
 func addLine(filePath, line string) error {
-	// stat 'filePath'
-	_, err := os.Stat(filePath)
-	if err != nil {
-		return fmt.Errorf("could not stat '%s': %s", filePath, err)
-	}
 	// open 'filepath' for writing, and begin writing at the end. If 'filepath'
 	// does not exist, create it.
 	// See http://man7.org/linux/man-pages/man2/openat.2.html for more
@@ -83,7 +78,11 @@ func addLine(filePath, line string) error {
 		return fmt.Errorf("could not open '%s': %s", filePath, err)
 	}
 
-	// write 'out' into file and close it.
+	// make sure 'line' ends in '\n' (so that you're actually appending a line)
+	// write 'line' into file and close it.
+	if !strings.HasSuffix(line, "\n") {
+		line += "\n"
+	}
 	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("could not append to '%s': %s", filePath, err)
 	}
