@@ -75,15 +75,17 @@ func addLine(filePath, line string) error {
 	if err != nil {
 		return fmt.Errorf("could not stat '%s': %s", filePath, err)
 	}
-	// if 'filePath' exists, open it
-	file, err := os.OpenFile(filePath, os.O_APPEND, 0664)
+	// open 'filepath' for writing, and begin writing at the end. If 'filepath'
+	// does not exist, create it.
+	// See http://man7.org/linux/man-pages/man2/openat.2.html for more
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0664)
 	if err != nil {
 		return fmt.Errorf("could not open '%s': %s", filePath, err)
 	}
 
 	// write 'out' into file and close it.
 	if _, err := file.WriteString(line); err != nil {
-		return fmt.Errorf("could append to '%s': %s", filePath, err)
+		return fmt.Errorf("could not append to '%s': %s", filePath, err)
 	}
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("could not close '%s': %s", filePath, err)
@@ -116,7 +118,6 @@ var newClient = &cobra.Command{
 	Short: "Create a new client for working on Pachyderm",
 	Run: boundedCommand(1, 1, func(args []string) error {
 		clientname := args[0]
-
 		// Create the directory tree of a new client (i.e.
 		// /clients/${client}/{src,pkg,dir})
 		f := dircreator{}
@@ -165,10 +166,9 @@ var newClient = &cobra.Command{
 			fmt.Println("pachyderm repo fetched")
 			os.Chdir(path.Join(clientpath, "src/github.com/pachyderm/pachyderm"))
 
-			// Create a git branch matching the clientname
-			// TODO(msteffen): let the user specify the branch, in case you want to
-			// have multiple clients for the same non-master branch
+			// Create a git branch matching the clientname, and delete "master"
 			op.Run("git", "checkout", "-b", clientname)
+			op.Run("git", "branch", "-d", "master")
 			if op.LastError() != nil {
 				return fmt.Errorf("couldn't create client branch:\n%s", op.DetailedError())
 			}
@@ -181,22 +181,28 @@ var newClient = &cobra.Command{
 				"url = git@github.com:pachyderm/pachyderm.git"); err != nil {
 				return fmt.Errorf("could not update .git/config: %s", err)
 			}
-			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
-			if err := addLine(".gitignore", gitIgnoreAdditions); err != nil {
-				return fmt.Errorf("could not update .gitignore: %s", err)
-			}
-			fmt.Println("Adding to .gitignore:\n%s\n", gitIgnoreAdditions)
 			if err := replaceLine("Dockerfile",
 				"https://get.docker.com/builds/Linux/x86_64/docker-1.12.1.tgz",
 				"https://get.docker.com/builds/Linux/x86_64/docker-1.11.1.tgz"); err != nil {
 				return fmt.Errorf("could not update Dockerfile: %s", err)
 			}
+			// Add known differences to gitignore and agignore
+			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
+			if err := addLine("./.gitignore", gitIgnoreAdditions); err != nil {
+				return err
+			}
+			fmt.Printf("Adding to .gitignore:\n%s\n", gitIgnoreAdditions)
+
+			agIgnoreAdditions := "vendor"
+			if err := addLine("./.agignore", agIgnoreAdditions); err != nil {
+				return err
+			}
+			fmt.Printf("Adding to .agignore:\n%s\n", agIgnoreAdditions)
 			return nil
 		})
 
 		// Return once both operations are finished
-		eg.Wait()
-		return nil
+		return eg.Wait()
 	}),
 }
 

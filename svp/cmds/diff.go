@@ -22,10 +22,9 @@ import (
 const magicStr = `d0559e2982835732f88960cc0d87ca25914ff308dcf9247363c7a36537e6be35`
 
 var (
-	branch   string // branch to diff against ("master" by default)
-	tool     string // tool to view the diff with ("meld" by default)
-	upstream bool   // If true, diff against the upstream version of this branch
-	skip     string // regex--instruct 'svp diff' to skip files that match
+	branch string // branch to diff against ("master" by default)
+	tool   string // tool to view the diff with ("meld" by default)
+	skip   string // regex--instruct 'svp diff' to skip files that match
 )
 
 var (
@@ -33,9 +32,11 @@ var (
 	/* const */ branchFileNotExist = regexp.MustCompile(
 		"^fatal: Path '[[:graph:]]+' does not exist in '[[:word:]]+'$")
 
-	// This error indicates that no commit in --branch contains 'path', and also
-	// that 'path' is only in the working directory (i.e. no commits in CurBranch)
-	/* const */ workingDirOnly = regexp.MustCompile(
+	// 'git show' emits this error if no commit in --branch contains 'path', and
+	// also that 'path' is only in the working directory (i.e. no commits in
+	// CurBranch)
+	/* const */
+	workingDirOnly = regexp.MustCompile(
 		"^fatal: Path '[[:graph:]]+' exists on disk, but not in '[[:word:]]+'.$")
 )
 
@@ -164,17 +165,6 @@ var diff = &cobra.Command{
 	Use:   "diff <filename>",
 	Short: "Diff files against some other branch of the pachyderm repo",
 	Run: unboundedCommand(func(args []string) error {
-		// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
-		if CurBranch == "master" && !upstream {
-			return fmt.Errorf("current branch is 'master'...cannot diff master " +
-				"against itself")
-		} else if branch != "master" && upstream {
-			return fmt.Errorf("cannot set both --branch and --upstream")
-		}
-		if upstream {
-			branch = "origin/" + CurBranch
-		}
-
 		// Compile regex for skipping uninteresting files
 		skip2 := Config.DiffSkip
 		if skip != magicStr {
@@ -254,9 +244,6 @@ func DiffCommand() *cobra.Command {
 		"The branch to diff against")
 	diff.PersistentFlags().StringVarP(&tool, "tool", "t", "meld",
 		"The branch to diff against")
-	diff.PersistentFlags().BoolVar(&upstream, "upstream", false,
-		"If true, diff this branch against the upstream version of itself. At "+
-			"most one of --upstream and --branch should be set")
 	diff.PersistentFlags().StringVar(&skip, "skip", magicStr,
 		"A regex that is used to skip files encountered by 'svp diff' (e.g. "+
 			"vendored files or .gitignore)")
