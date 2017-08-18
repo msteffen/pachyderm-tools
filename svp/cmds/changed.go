@@ -14,6 +14,17 @@ var (
 	/* const */ whitespace = regexp.MustCompile("^[ \t\r\n]*$")
 	/* const */ statusPlain = regexp.MustCompile("^(..) ([^ ]*)$")
 	/* const */ statusArrow = regexp.MustCompile("^(..) [^ ]* -> ([^ ]*)$")
+
+	// alwaysModified contains files that the svp tool modifies when creating a new
+	// client, along with files that aren't edited by hand (e.g. the 'pachd'
+	// binary), so 'svp changed' should ignore them
+	/* const */
+	alwaysModified = map[string]struct{}{
+		".gitignore": struct{}{},
+		"Dockerfile": struct{}{},
+		".agignore":  struct{}{},
+		"pachd":      struct{}{},
+	}
 )
 
 // uncommittedFiles returns the list of files that have changed in the working
@@ -21,7 +32,7 @@ var (
 //
 // All files are relative to the root of the current git repo. Used by
 // ModifiedFiles()
-func uncommittedFiles() (map[string]bool, error) {
+func uncommittedFiles() (map[string]struct{}, error) {
 	cmdString := "git status --porcelain"
 	statusCmd := exec.Command("git", "status", "--porcelain")
 	fileLines, err := statusCmd.Output()
@@ -29,20 +40,24 @@ func uncommittedFiles() (map[string]bool, error) {
 		return nil, fmt.Errorf("Could not get files from git status: (\"%s\"):\n%s",
 			cmdString, err)
 	}
-	files := make(map[string]bool)
+	files := make(map[string]struct{})
 	for _, line := range strings.Split(string(fileLines), "\n") {
 		if len(line) == 0 || whitespace.MatchString(line) {
 			continue
 		}
 		// Match status line against one of the regexes
-		var captureGroups []string
-		captureGroups = statusPlain.FindStringSubmatch(line)
-		if captureGroups == nil {
-			captureGroups = statusArrow.FindStringSubmatch(line)
-		}
-		if captureGroups == nil {
+		captureGroups, err := func() ([]string, error) {
+			if c := statusPlain.FindStringSubmatch(line); c != nil {
+				return c, nil
+			}
+			if c := statusArrow.FindStringSubmatch(line); c != nil {
+				return c, nil
+			}
 			return nil, fmt.Errorf("No status regex matched \"%s\" line:\n%s",
 				cmdString, line)
+		}()
+		if err != nil {
+			return nil, err
 		}
 
 		// Skip files that are in the workding directory but haven't been added
@@ -50,7 +65,10 @@ func uncommittedFiles() (map[string]bool, error) {
 		if captureGroups[1] == "??" {
 			continue
 		}
-		files[captureGroups[2]] = true
+		filename := captureGroups[2]
+		if _, boring := alwaysModified[filename]; !boring {
+			files[filename] = struct{}{}
+		}
 	}
 	return files, nil
 }
@@ -63,7 +81,7 @@ func uncommittedFiles() (map[string]bool, error) {
 //
 // All returned file paths are relative to the root of the current git repo.
 // Used by ModifiedFiles().
-func committedFiles(left, right string) (map[string]bool, error) {
+func committedFiles(left, right string) (map[string]struct{}, error) {
 	// Get files only in 'left' but not 'right'
 	cmd := []string{"git", "log", "--format=", "--name-only", left, "^" + right}
 	cmdString := strings.Join(cmd, " ")
@@ -84,11 +102,11 @@ func committedFiles(left, right string) (map[string]bool, error) {
 	}
 
 	// Dedupe files in output of command (i.e. create output set)
-	files := make(map[string]bool)
+	files := make(map[string]struct{})
 	for _, log := range [][]byte{leftLogLines, rightLogLines} {
 		for _, line := range strings.Split(string(log), "\n") {
 			if len(line) > 0 {
-				files[line] = true
+				files[line] = struct{}{}
 			}
 		}
 	}
@@ -115,15 +133,13 @@ func ModifiedFiles(left, right string) ([]string, error) {
 			return nil, err
 		}
 		for file := range uncommitted {
-			files[file] = true
+			files[file] = struct{}{}
 		}
 	}
 	// Merge results
-	result := make([]string, len(files))
-	i := 0
+	result := make([]string, 0, len(files))
 	for f := range files {
-		result[i] = f
-		i++
+		result = append(result, f)
 	}
 	return result, nil
 }
