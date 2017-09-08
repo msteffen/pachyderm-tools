@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -41,20 +42,20 @@ func uncommittedFiles() (map[string]struct{}, error) {
 			cmdString, err)
 	}
 	files := make(map[string]struct{})
-	for _, line := range strings.Split(string(fileLines), "\n") {
-		if len(line) == 0 || whitespace.MatchString(line) {
+	for _, line := range bytes.Split(fileLines, []byte{'\n'}) {
+		if len(line) == 0 || whitespace.Match(line) {
 			continue
 		}
 		// Match status line against one of the regexes
-		captureGroups, err := func() ([]string, error) {
-			if c := statusPlain.FindStringSubmatch(line); c != nil {
+		captureGroups, err := func() ([][]byte, error) {
+			if c := statusPlain.FindSubmatch(line); c != nil {
 				return c, nil
 			}
-			if c := statusArrow.FindStringSubmatch(line); c != nil {
+			if c := statusArrow.FindSubmatch(line); c != nil {
 				return c, nil
 			}
 			return nil, fmt.Errorf("No status regex matched \"%s\" line:\n%s",
-				cmdString, line)
+				cmdString, string(line))
 		}()
 		if err != nil {
 			return nil, err
@@ -62,10 +63,10 @@ func uncommittedFiles() (map[string]struct{}, error) {
 
 		// Skip files that are in the workding directory but haven't been added
 		// to the index yet (usually logs and scripts. line starts with ??)
-		if captureGroups[1] == "??" {
+		if bytes.Equal(captureGroups[1], []byte{'?', '?'}) {
 			continue
 		}
-		filename := captureGroups[2]
+		filename := string(captureGroups[2])
 		if _, boring := alwaysModified[filename]; !boring {
 			files[filename] = struct{}{}
 		}
@@ -104,9 +105,9 @@ func committedFiles(left, right string) (map[string]struct{}, error) {
 	// Dedupe files in output of command (i.e. create output set)
 	files := make(map[string]struct{})
 	for _, log := range [][]byte{leftLogLines, rightLogLines} {
-		for _, line := range strings.Split(string(log), "\n") {
+		for _, line := range bytes.Split(log, []byte{'\n'}) {
 			if len(line) > 0 {
-				files[line] = struct{}{}
+				files[string(line)] = struct{}{}
 			}
 		}
 	}
