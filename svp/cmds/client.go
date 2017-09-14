@@ -180,11 +180,6 @@ var newClient = &cobra.Command{
 				"url = git@github.com:pachyderm/pachyderm.git"); err != nil {
 				return fmt.Errorf("could not update .git/config: %s", err)
 			}
-			if err := replaceLine("Dockerfile",
-				"https://get.docker.com/builds/Linux/x86_64/docker-1.12.1.tgz",
-				"https://get.docker.com/builds/Linux/x86_64/docker-1.11.1.tgz"); err != nil {
-				return fmt.Errorf("could not update Dockerfile: %s", err)
-			}
 			// Add known differences to gitignore and agignore
 			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
 			if err := addLine("./.gitignore", gitIgnoreAdditions); err != nil {
