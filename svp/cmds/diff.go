@@ -30,11 +30,10 @@ var (
 var (
 	// This error indicates that no commit in --branch contains 'path'
 	/* const */ branchFileNotExist = regexp.MustCompile(
-		"^fatal: Path '[[:graph:]]+' does not exist in '[[:word:]]+'$")
+		"^fatal: Path '[[:graph:]]+' does not exist in '[[:word:]/]+'$")
 
-	// 'git show' emits this error if no commit in --branch contains 'path', and
-	// also that 'path' is only in the working directory (i.e. no commits in
-	// CurBranch)
+	// 'git show' emits this error if no commit in --branch contains 'path', but
+	// 'path' is in the working directory
 	/* const */
 	workingDirOnly = regexp.MustCompile(
 		"^fatal: Path '[[:graph:]]+' exists on disk, but not in '[[:word:]/]+'.$")
