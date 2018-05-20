@@ -29,7 +29,9 @@ func useDefaultConfig() {
 
 type command func([]string) error
 
-func unboundedCommand(f command) func(*cobra.Command, []string) {
+// UnboundedCommand is a convenience function that takes a function accepting a
+// slice of arguments and returning an error, and puts it in a cobra command
+func UnboundedCommand(f command) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, args []string) {
 		if err := f(args); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
@@ -38,12 +40,12 @@ func unboundedCommand(f command) func(*cobra.Command, []string) {
 	}
 }
 
-// Bounded command is a convenience function that takes a lower and upper bound
+// BoundedCommand is a convenience function that takes a lower and upper bound
 // on the number of positional arguments that a cobra command can recieve, and
 // a definition of the command itself (in 'f') and return a func that can be
 // added to a Cobra command-line tool
 // TODO print usage
-func boundedCommand(minargs, maxargs int, f command) func(*cobra.Command, []string) {
+func BoundedCommand(minargs, maxargs int, f command) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, args []string) {
 		var err error
 		argc := len(args)

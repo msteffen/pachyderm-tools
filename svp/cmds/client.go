@@ -115,7 +115,7 @@ func (f *dircreator) mkdir(path string, mode os.FileMode, desc string) {
 var newClient = &cobra.Command{
 	Use:   "new-client",
 	Short: "Create a new client for working on Pachyderm",
-	Run: boundedCommand(1, 1, func(args []string) error {
+	Run: BoundedCommand(1, 1, func(args []string) error {
 		clientname := args[0]
 		// Create the directory tree of a new client (i.e.
 		// /clients/${client}/{src,pkg,dir})
@@ -204,7 +204,7 @@ var newClient = &cobra.Command{
 var deleteClient = &cobra.Command{
 	Use:   "delete-client",
 	Short: "Delete a Pachyderm client",
-	Run: boundedCommand(1, 1, func(args []string) error {
+	Run: BoundedCommand(1, 1, func(args []string) error {
 		clientname := args[0]
 
 		// Check if the client path exists (exit early if not)
@@ -270,7 +270,7 @@ var deleteClient = &cobra.Command{
 var sync = &cobra.Command{
 	Use:   "sync",
 	Short: "update this client (sync master, and rebase working branch on top of it",
-	Run: boundedCommand(0, 0, func(args []string) error {
+	Run: BoundedCommand(0, 0, func(args []string) error {
 		return nil
 	}),
 }

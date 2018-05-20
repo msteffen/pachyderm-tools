@@ -163,7 +163,7 @@ func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 var diff = &cobra.Command{
 	Use:   "diff <filename>",
 	Short: "Diff files against some other branch of the pachyderm repo",
-	Run: unboundedCommand(func(args []string) error {
+	Run: UnboundedCommand(func(args []string) error {
 		// Compile regex for skipping uninteresting files
 		skip2 := Config.DiffSkip
 		if skip != magicStr {
