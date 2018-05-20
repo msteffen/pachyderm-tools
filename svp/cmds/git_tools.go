@@ -16,7 +16,8 @@ var (
 	GitRoot string
 
 	// This error (from the 'git' CLI) means 'svp' was not run from a git repo
-	/*const */ notAGitRepo = regexp.MustCompile("^fatal: Not a git repository")
+	/*const */
+	notAGitRepo = regexp.MustCompile("^fatal: Not a git repository")
 )
 
 // CurBranch returns the name of the current branch of the git repo you're in
@@ -72,7 +73,7 @@ func GitHelperCommands() []*cobra.Command {
 		&cobra.Command{
 			Use:   "cur-branch",
 			Short: "Print the name of the current branch of the git repo you're in",
-			Run: boundedCommand(0, 0, func(args []string) error {
+			Run: BoundedCommand(0, 0, func(args []string) error {
 				if GitRoot == "" {
 					return fmt.Errorf("cur-branch must be run from inside a git repo")
 				}
@@ -83,7 +84,7 @@ func GitHelperCommands() []*cobra.Command {
 		&cobra.Command{
 			Use:   "root-path",
 			Short: "Print absolute path to the root of the git repo you're in",
-			Run: boundedCommand(0, 0, func(args []string) error {
+			Run: BoundedCommand(0, 0, func(args []string) error {
 				if GitRoot == "" {
 					return fmt.Errorf("root-path must be run from inside a git repo")
 				}

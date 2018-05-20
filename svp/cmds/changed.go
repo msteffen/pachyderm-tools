@@ -151,7 +151,7 @@ func ChangedFilesCommand() *cobra.Command {
 	changed := &cobra.Command{
 		Use:   "changed",
 		Short: "List the files that have changed between this branch and master",
-		Run: boundedCommand(0, 0, func(args []string) error {
+		Run: BoundedCommand(0, 0, func(args []string) error {
 			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
 			files, err := ModifiedFiles(CurBranch, branch)
 			if err != nil {
