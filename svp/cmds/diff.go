@@ -12,6 +12,9 @@ import (
 	"strings"
 
 	"github.com/msteffen/pachyderm-tools/op"
+	"github.com/msteffen/pachyderm-tools/svp/config"
+	"github.com/msteffen/pachyderm-tools/svp/git"
+
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +50,7 @@ func meld(tmpdir string, files []string, tmpfiles []*os.File) error {
 	for i := 0; i < len(files); i++ {
 		cmd[3*i] = "--diff"
 		cmd[(3*i)+1] = tmpfiles[i].Name()
-		cmd[(3*i)+2] = path.Join(GitRoot, files[i])
+		cmd[(3*i)+2] = path.Join(git.Root, files[i])
 	}
 	output, err := exec.Command("meld", cmd...).CombinedOutput()
 	if err != nil {
@@ -95,10 +98,10 @@ func vimdiff(tmpdir string, files []string, tmpfiles []*os.File) error {
 	// as vim tabs
 	buf := bytes.Buffer{} // bytes.Buffer.Write() does not return errors
 	buf.WriteString(fmt.Sprintf("set diffopt=filler,vertical\n"))
-	buf.WriteString(fmt.Sprintf("edit %s\n", path.Join(GitRoot, files[0])))
+	buf.WriteString(fmt.Sprintf("edit %s\n", path.Join(git.Root, files[0])))
 	buf.WriteString(fmt.Sprintf("diffsplit %s\n", tmpfiles[0].Name()))
 	for i := 1; i < len(files); i++ {
-		buf.WriteString(fmt.Sprintf("tabe %s\n", path.Join(GitRoot, files[i])))
+		buf.WriteString(fmt.Sprintf("tabe %s\n", path.Join(git.Root, files[i])))
 		buf.WriteString(fmt.Sprintf("diffsplit %s\n", tmpfiles[i].Name()))
 	}
 	buf.WriteString("tabfirst\n")
@@ -165,11 +168,11 @@ var diff = &cobra.Command{
 	Short: "Diff files against some other branch of the pachyderm repo",
 	Run: UnboundedCommand(func(args []string) error {
 		// Compile regex for skipping uninteresting files
-		skip2 := Config.DiffSkip
+		skip2 := config.Config.Diff.Skip
 		if skip != magicStr {
 			skip2 = skip
 		}
-		skipRe, err := regexp.Compile(Config.DiffSkip)
+		skipRe, err := regexp.Compile(config.Config.Diff.Skip)
 		if err != nil {
 			return fmt.Errorf("could not compile regex \"%s\" for skipping files: %s",
 				skip2, err)
@@ -179,7 +182,7 @@ var diff = &cobra.Command{
 		// current branch, or 2) files passed via args.
 		var files []string
 		if len(args) == 0 {
-			files0, err := ModifiedFiles(CurBranch, branch)
+			files0, err := ModifiedFiles(git.CurBranch, branch)
 			if err != nil {
 				return fmt.Errorf("could not get list of changed files "+
 					"(to diff):\n%s", err)
@@ -192,7 +195,7 @@ var diff = &cobra.Command{
 			}
 		} else {
 			for _, arg := range args {
-				fullFilename := path.Join(GitRoot, arg)
+				fullFilename := path.Join(git.Root, arg)
 				if _, err := os.Stat(fullFilename); os.IsNotExist(err) {
 					return fmt.Errorf("file \"%s\" does not exist", fullFilename)
 				}
@@ -201,7 +204,7 @@ var diff = &cobra.Command{
 		}
 		if len(files) == 0 {
 			return fmt.Errorf("no differing files found between \"%s\" and \"%s\"",
-				CurBranch, branch)
+				git.CurBranch, branch)
 		}
 		sort.Strings(files)
 
