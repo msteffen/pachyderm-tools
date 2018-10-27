@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/msteffen/pachyderm-tools/svp/git"
+
 	"github.com/spf13/cobra"
 )
 
@@ -128,7 +130,7 @@ func ModifiedFiles(left, right string) ([]string, error) {
 		return nil, err
 	}
 	// Get uncommitted files
-	if left == CurBranch || right == CurBranch {
+	if left == git.CurBranch || right == git.CurBranch {
 		uncommitted, err := uncommittedFiles()
 		if err != nil {
 			return nil, err
@@ -152,8 +154,11 @@ func ChangedFilesCommand() *cobra.Command {
 		Use:   "changed",
 		Short: "List the files that have changed between this branch and master",
 		Run: BoundedCommand(0, 0, func(args []string) error {
+			if git.Root == "" {
+				return fmt.Errorf("cannot list changed files; not in a git repo")
+			}
 			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
-			files, err := ModifiedFiles(CurBranch, branch)
+			files, err := ModifiedFiles(git.CurBranch, branch)
 			if err != nil {
 				return err
 			}

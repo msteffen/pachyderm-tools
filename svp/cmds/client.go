@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/msteffen/pachyderm-tools/op"
+	"github.com/msteffen/pachyderm-tools/svp/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -120,8 +122,8 @@ var newClient = &cobra.Command{
 		// Create the directory tree of a new client (i.e.
 		// /clients/${client}/{src,pkg,dir})
 		f := dircreator{}
-		f.mkdir(Config.ClientDirectory, 077, "parent directory of clients")
-		clientpath := path.Join(Config.ClientDirectory, clientname)
+		f.mkdir(config.Config.ClientDirectory, 077, "parent directory of clients")
+		clientpath := path.Join(config.Config.ClientDirectory, clientname)
 		if !clientMatcher.MatchString(clientpath) {
 			return fmt.Errorf("client name must match %s but was %s", clientNameRegex,
 				clientpath)
@@ -208,7 +210,7 @@ var deleteClient = &cobra.Command{
 		clientname := args[0]
 
 		// Check if the client path exists (exit early if not)
-		clientpath := path.Join(Config.ClientDirectory, clientname)
+		clientpath := path.Join(config.Config.ClientDirectory, clientname)
 		if _, err := os.Stat(clientpath); err != nil {
 			if os.IsNotExist(err) {
 				return fmt.Errorf("could not delete %s: client does not exist",
@@ -256,7 +258,7 @@ var deleteClient = &cobra.Command{
 		if delOp.Run("git", "branch", "-d", clientname); delOp.LastError() != nil {
 			return fmt.Errorf("could not delete branch: %s", delOp.DetailedError())
 		}
-		if err := os.Chdir(Config.ClientDirectory); err != nil {
+		if err := os.Chdir(config.Config.ClientDirectory); err != nil {
 			return err
 		}
 		if err := os.RemoveAll(clientpath); err != nil {
