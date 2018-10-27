@@ -3,14 +3,23 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"sync"
 )
 
-var configOnce sync.Once
+const configPathEnvVar = "SVPCONFIG"
+
+var (
+	// configOnce ensures that 'Config' is only initialized once
+	configOnce sync.Once
+
+	// default config path is the location of svp's config file if 'SVPCONFIG'
+	// isn't set
+	defaultConfigPath = path.Join(os.Getenv("HOME"), ".svpconfig")
+)
 
 // Config is a struct containing all fields defined in the .svpconfig file
 // (this is how configured values can be accessed)
@@ -29,26 +38,31 @@ var Config struct {
 	} `json:diff`
 }
 
+func configPath() string {
+	path, ok := os.LookupEnv(configPathEnvVar)
+	if ok {
+		return path
+	}
+	return defaultConfigPath
+}
+
 // InitConfig initializes 'Config'. It's public so that other packages' init()
 // functions can call it if they need fields in config(), but this package's
 // init() function calls it as well, so non-init() code should be able to read
 // Config directly
 func InitConfig() {
 	configOnce.Do(func() {
+		p := configPath()
 		// Parse config and initialize Config fields
-		configpath := path.Join(os.Getenv("HOME"), ".svpconfig")
-		if _, err := os.Stat(configpath); os.IsNotExist(err) {
-			useDefaultConfig()
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			loadDefaultConfig()
 		} else {
-			configfile, err := os.Open(configpath)
+			cfg, err := ioutil.ReadFile(p)
 			if err != nil {
-				log.Fatalf("could not open config file at %s for reading: %s",
-					configpath, err)
+				log.Fatalf("could not read contents of config file at %s: %v",
+					p, err)
 			}
-			buf := bytes.NewBuffer(nil)
-			io.Copy(buf, configfile)
-			err = json.Unmarshal(buf.Bytes(), &Config)
-			if err != nil {
+			if err = json.Unmarshal(cfg, &Config); err != nil {
 				log.Fatalf("could not parse ${HOME}/.svpconfig: %s", err.Error())
 			}
 		}
@@ -59,7 +73,7 @@ func init() {
 	InitConfig()
 }
 
-func useDefaultConfig() {
+func loadDefaultConfig() {
 	Config.ClientDirectory = path.Join(os.Getenv("HOME"), "clients")
 	Config.Diff.Tool = "meld"
 }
