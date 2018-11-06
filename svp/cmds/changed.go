@@ -25,7 +25,7 @@ var (
 	alwaysModified = map[string]struct{}{
 		".gitignore": struct{}{},
 		"Dockerfile": struct{}{},
-		".agignore":  struct{}{},
+		".ignore":    struct{}{},
 		"pachd":      struct{}{},
 	}
 )
