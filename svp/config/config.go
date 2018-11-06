@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"log"
@@ -25,17 +24,17 @@ var (
 // (this is how configured values can be accessed)
 var Config struct {
 	// The top-level directory containing all clients
-	ClientDirectory string `json:client_directory`
+	ClientDirectory string `json:"client_directory"`
 
 	Diff struct {
 		// The user's preferred tool for diffing branches
-		Tool string `json:tool`
+		Tool string `json:"tool"`
 
 		// Regex to let users skip certain files in svp diff
 		// TODO: Skip should be settable per client (with maybe a global default?)
 		// (maybe a flag override allowed too?)
-		Skip string `json:skip`
-	} `json:diff`
+		Skip string `json:"skip"`
+	} `json:"diff"`
 }
 
 func configPath() string {
