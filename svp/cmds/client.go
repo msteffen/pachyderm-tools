@@ -80,13 +80,15 @@ func addLine(filePath, line string) error {
 		return fmt.Errorf("could not open '%s': %s", filePath, err)
 	}
 
-	// make sure 'line' ends in '\n' (so that you're actually appending a line)
 	// write 'line' into file and close it.
-	if !strings.HasSuffix(line, "\n") {
-		line += "\n"
-	}
 	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("could not append to '%s': %s", filePath, err)
+	}
+	// make sure 'line' ends in '\n' (so that you're actually appending a line)
+	if !strings.HasSuffix(line, "\n") {
+		if _, err := file.WriteString("\n"); err != nil {
+			return fmt.Errorf("could not append newline to '%s': %s", filePath, err)
+		}
 	}
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("could not close '%s': %s", filePath, err)
@@ -182,18 +184,25 @@ var newClient = &cobra.Command{
 				"url = git@github.com:pachyderm/pachyderm.git"); err != nil {
 				return fmt.Errorf("could not update .git/config: %s", err)
 			}
-			// Add known differences to gitignore and agignore
+			// Add known differences to gitignore and ignore
 			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
 			if err := addLine("./.gitignore", gitIgnoreAdditions); err != nil {
 				return err
 			}
 			fmt.Printf("Adding to .gitignore:\n%s\n", gitIgnoreAdditions)
 
-			agIgnoreAdditions := "vendor"
-			if err := addLine("./.agignore", agIgnoreAdditions); err != nil {
+			agIgnoreAdditions := "vendor\ndoc\n"
+			if err := addLine("./.ignore", agIgnoreAdditions); err != nil {
 				return err
 			}
-			fmt.Printf("Adding to .agignore:\n%s\n", agIgnoreAdditions)
+			fmt.Printf("Adding to .ignore:\n%s\n", agIgnoreAdditions)
+
+			envRcAdditions := "export GOPATH=\"${HOME}/clients/%s\"\n"
+			envRcAdditions += "export PATH=\"${PATH}:${HOME}/clients/%s/bin\"\n"
+			if err := addLine("./.ignore", envRcAdditions); err != nil {
+				return err
+			}
+			fmt.Printf("Adding to .ignore:\n%s\n", envRcAdditions)
 			return nil
 		})
 
