@@ -73,6 +73,6 @@ func init() {
 }
 
 func loadDefaultConfig() {
-	Config.ClientDirectory = path.Join(os.Getenv("HOME"), "clients")
+	Config.ClientDirectory = path.Join("${HOME}", "clients")
 	Config.Diff.Tool = "meld"
 }
