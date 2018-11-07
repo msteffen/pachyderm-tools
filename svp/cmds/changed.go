@@ -3,6 +3,7 @@ package cmds
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -126,6 +127,9 @@ func committedFiles(left, right string) (map[string]struct{}, error) {
 func ModifiedFiles(left, right string) ([]string, error) {
 	if git.Root == "" {
 		return nil, fmt.Errorf("must be inside a git repo to list modified files")
+	}
+	if err := os.Chdir(git.Root); err != nil {
+		return nil, fmt.Errorf("could not cd to %s: %v", git.Root, err)
 	}
 	// Get committed files
 	files, err := committedFiles(left, right)
