@@ -141,16 +141,29 @@ var newClient = &cobra.Command{
 			return f.err
 		}
 
-		// Download data (pachyderm repo and vim binaries) into the new client
-		// TODO: This should be copied instead of downloaded every time. This takes
-		// several seconds to finish
-		var eg errgroup.Group
+		// Set GOPATH for subsequent commands, and create .envrc file to set it
+		// every time we enter this file
 		if err := os.Setenv("GOPATH", clientpath); err != nil {
 			return fmt.Errorf("could not set GOPATH: %v", err)
 		}
 		if err := os.Chdir(clientpath); err != nil {
 			return fmt.Errorf("could not cd to %q: %v", clientpath, err)
 		}
+		envRcAdditions := fmt.Sprintf("export GOPATH=%q\n",
+			path.Join(config.Config.ClientDirectory, clientname))
+		envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s\"\n",
+			path.Join(config.Config.ClientDirectory, clientname, "bin"))
+		envRcAdditions += fmt.Sprintf("export KUBECONFIG=%q",
+			path.Join(config.Config.ClientDirectory, clientname, ".kubeconfig"))
+		if err := addLine("./.envrc", envRcAdditions); err != nil {
+			return err
+		}
+		fmt.Printf("Adding to .envrc:\n%s\n", envRcAdditions)
+
+		// Download data (pachyderm repo and vim binaries) into the new client
+		// TODO: This should be copied instead of downloaded every time. This takes
+		// several seconds to finish
+		var eg errgroup.Group
 		// Install vim-go binaries in a separate goroutine (slow)
 		eg.Go(func() error {
 			fmt.Println("Beginning to install vim-go binaries...")
@@ -206,18 +219,6 @@ var newClient = &cobra.Command{
 				return err
 			}
 			fmt.Printf("Adding to .ignore:\n%s\n", agIgnoreAdditions)
-
-			envRcAdditions := fmt.Sprintf("export GOPATH=%q\n",
-				path.Join(config.Config.ClientDirectory, clientname))
-			envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s\"\n",
-				path.Join(config.Config.ClientDirectory, clientname, "bin"))
-			envRcAdditions += fmt.Sprintf("export KUBECONFIG=%q",
-				path.Join(config.Config.ClientDirectory, clientname,
-					"/src/github.com/pachyderm/pachyderm/.kubeconfig"))
-			if err := addLine("./.envrc", envRcAdditions); err != nil {
-				return err
-			}
-			fmt.Printf("Adding to .envrc:\n%s\n", envRcAdditions)
 			return nil
 		})
 
