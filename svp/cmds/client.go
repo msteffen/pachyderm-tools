@@ -185,7 +185,7 @@ var newClient = &cobra.Command{
 				return fmt.Errorf("could not update .git/config: %s", err)
 			}
 			// Add known differences to gitignore and ignore
-			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile"
+			gitIgnoreAdditions := "src/server/pachyderm_test.go.old\nDockerfile\n.kubeconfig\n.gitignore\n"
 			if err := addLine("./.gitignore", gitIgnoreAdditions); err != nil {
 				return err
 			}
@@ -197,12 +197,13 @@ var newClient = &cobra.Command{
 			}
 			fmt.Printf("Adding to .ignore:\n%s\n", agIgnoreAdditions)
 
-			envRcAdditions := "export GOPATH=\"${HOME}/clients/%s\"\n"
-			envRcAdditions += "export PATH=\"${PATH}:${HOME}/clients/%s/bin\"\n"
-			if err := addLine("./.ignore", envRcAdditions); err != nil {
+			envRcAdditions := fmt.Sprintf("export GOPATH=\"%s/%s\"\n", config.Config.ClientDirectory, clientname)
+			envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s/%s/bin\"\n", config.Config.ClientDirectory, clientname)
+			envRcAdditions += fmt.Sprintf("export KUBECONFIG=\"%s/%s/src/github.com/pachyderm/pachyderm/.kubeconfig\"\n", config.Config.ClientDirectory, clientname)
+			if err := addLine("./.envrc", envRcAdditions); err != nil {
 				return err
 			}
-			fmt.Printf("Adding to .ignore:\n%s\n", envRcAdditions)
+			fmt.Printf("Adding to .envrc:\n%s\n", envRcAdditions)
 			return nil
 		})
 
