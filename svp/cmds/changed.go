@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/msteffen/pachyderm-tools/svp/git"
-
-	"github.com/spf13/cobra"
 )
 
 // Regexes for parsing the output of 'git status' in uncommittedFiles()
@@ -117,20 +115,14 @@ func committedFiles(left, right string) (map[string]struct{}, error) {
 	return files, nil
 }
 
-// ModifiedFiles returns the list of all files that are different in the
+// modifiedFiles returns the list of all files that are different in the
 // branches 'left' and 'right'. Note that if one of the files is the current
 // branch, then files that not committed will be included (i.e. files in the
 // working tree)
 //
 // All results are file paths relative to the root of the current git repo
 // (stored in GitRoot)
-func ModifiedFiles(left, right string) ([]string, error) {
-	if git.Root == "" {
-		return nil, fmt.Errorf("must be inside a git repo to list modified files")
-	}
-	if err := os.Chdir(git.Root); err != nil {
-		return nil, fmt.Errorf("could not cd to %s: %v", git.Root, err)
-	}
+func modifiedFiles(left, right string) ([]string, error) {
 	// Get committed files
 	files, err := committedFiles(left, right)
 	if err != nil {
@@ -152,30 +144,4 @@ func ModifiedFiles(left, right string) ([]string, error) {
 		result = append(result, f)
 	}
 	return result, nil
-}
-
-// ChangedFilesCommand returns a Cobra command that prints the output of
-// ModifiedFiles()
-func ChangedFilesCommand() *cobra.Command {
-	changed := &cobra.Command{
-		Use:   "changed",
-		Short: "List the files that have changed between this branch and master",
-		Run: BoundedCommand(0, 0, func(args []string) error {
-			if git.Root == "" {
-				return fmt.Errorf("changed must be run from inside a git repo")
-			}
-			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
-			files, err := ModifiedFiles(git.CurBranch, branch)
-			if err != nil {
-				return err
-			}
-			fmt.Println(strings.Join(files, "\n"))
-			return nil
-		}),
-	}
-
-	// 'branch' is declared in diff.go
-	changed.PersistentFlags().StringVarP(&branch, "branch", "b", "origin/master",
-		"Show changed files relative to this branch")
-	return changed
 }

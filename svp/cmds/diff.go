@@ -25,12 +25,6 @@ import (
 const magicStr = `d0559e2982835732f88960cc0d87ca25914ff308dcf9247363c7a36537e6be35`
 
 var (
-	branch string // branch to diff against ("master" by default)
-	tool   string // tool to view the diff with ("meld" by default)
-	skip   string // regex--instruct 'svp diff' to skip files that match
-)
-
-var (
 	// This error indicates that no commit in --branch contains 'path'
 	/* const */ branchFileNotExist = regexp.MustCompile(
 		"^fatal: Path '[[:graph:]]+' does not exist in '[[:word:]/]+'$")
@@ -63,23 +57,23 @@ func meld(tmpdir string, files []string, tmpfiles []*os.File) error {
 // with the prefix  'prefix' in the directory 'dir'. The file is closed, and the
 // name of the new file is returned (if it was created, along with any errors)
 func writeToTmpfile(dir, prefix string, contents []byte) (string, error) {
-	// Create the vimscript tempfile
-	vimscript, err := ioutil.TempFile(dir, prefix)
+	// Create the tempfile
+	tempfile, err := ioutil.TempFile(dir, prefix)
 	if err != nil {
-		return "", fmt.Errorf("could not create vimscript tempfile: %s", err)
+		return "", fmt.Errorf("could not create tempfile %sSUFFIX: %s", prefix, err)
 	}
-	name := vimscript.Name() // 'vimscript' now exists on disk; must return 'name'
+	name := tempfile.Name() // 'tempfile' now exists on disk; must return 'name'
 
-	// Write contents to 'vimscript'
-	_, err = vimscript.Write(contents)
+	// Write contents to 'tempfile'
+	_, err = tempfile.Write(contents)
 	if err != nil {
-		return name, fmt.Errorf("could not write out vimscript: %s", err)
+		return name, fmt.Errorf("could not write out tempfile %q: %s", name, err)
 	}
 
-	// close 'vimscript
-	err = vimscript.Close()
+	// close 'tempfile
+	err = tempfile.Close()
 	if err != nil {
-		return name, fmt.Errorf("could not close vimscript: %s", err)
+		return name, fmt.Errorf("could not close tempfile %q: %s", name, err)
 	}
 	return name, nil
 }
@@ -105,7 +99,7 @@ func vimdiff(tmpdir string, files []string, tmpfiles []*os.File) error {
 		buf.WriteString(fmt.Sprintf("diffsplit %s\n", tmpfiles[i].Name()))
 	}
 	buf.WriteString("tabfirst\n")
-	name, err := writeToTmpfile(tmpdir, "vim-diffscript", buf.Bytes())
+	name, err := writeToTmpfile(tmpdir, "vim-diffscript-", buf.Bytes())
 	if len(name) > 0 {
 		defer os.Remove(name) // delete vimscript file (even if err != nil)
 	}
@@ -160,105 +154,3 @@ func makeDiffTempFile(branch, tmpdir, file string) (*os.File, error) {
 	}
 	return tmpfile, nil
 }
-
-// diff is a cobra command that applies the diff tool to a given file, or to
-// all of the files changed in this workspace
-var diff = &cobra.Command{
-	Use:   "diff <filename>",
-	Short: "Diff files against some other branch of the pachyderm repo",
-	Run: UnboundedCommand(func(args []string) error {
-		if git.Root == "" {
-			return fmt.Errorf("diff must be run from inside a git repo")
-		}
-		// Compile regex for skipping uninteresting files
-		skip2 := config.Config.Diff.Skip
-		if skip != magicStr {
-			skip2 = skip
-		}
-		skipRe, err := regexp.Compile(config.Config.Diff.Skip)
-		if err != nil {
-			return fmt.Errorf("could not compile regex \"%s\" for skipping files: %s",
-				skip2, err)
-		}
-
-		// Get either 1) list of files that have changed between 'master' and
-		// current branch, or 2) files passed via args.
-		var files []string
-		if len(args) == 0 {
-			files0, err := ModifiedFiles(git.CurBranch, branch)
-			if err != nil {
-				return fmt.Errorf("could not get list of changed files "+
-					"(to diff):\n%s", err)
-			}
-			// Filter out uninteresting files
-			for _, file := range files0 {
-				if !skipRe.MatchString(file) {
-					files = append(files, file)
-				}
-			}
-		} else {
-			for _, arg := range args {
-				fullFilename := path.Join(git.Root, arg)
-				if _, err := os.Stat(fullFilename); os.IsNotExist(err) {
-					return fmt.Errorf("file \"%s\" does not exist", fullFilename)
-				}
-			}
-			files = args
-		}
-		if len(files) == 0 {
-			return fmt.Errorf("no differing files found between \"%s\" and \"%s\"",
-				git.CurBranch, branch)
-		}
-		sort.Strings(files)
-
-		// Create a temporary directory to contain copies of 'files' that will be
-		// diffed against (i.e. the contents of 'files' in 'branch').
-		tmpdir, err := ioutil.TempDir("/tmp", "svp-diff-master-files-")
-		if err != nil {
-			return fmt.Errorf("Could not create temporary file: %s", err)
-		}
-		defer os.RemoveAll(tmpdir)
-
-		// Populate the temporary directory with tmp files containing file
-		// contents from 'branch'
-		tmpfiles := make([]*os.File, len(files))
-		for i, file := range files {
-			tmpfiles[i], err = makeDiffTempFile(branch, tmpdir, file)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Run diff tool selected by user
-		if fn, ok := diffFn[tool]; ok {
-			err := fn(tmpdir, files, tmpfiles)
-			if err != nil {
-				return fmt.Errorf("could not run diff tool %s: %s", tool, err)
-			}
-			return nil
-		}
-		return fmt.Errorf("did not recognize diff command %s; must be \"vim\" " +
-			"or \"meld\"")
-	}),
-}
-
-// DiffCommand returns a collection of Cobra commands related to diffing files
-// that have been modified in a Pachyderm client
-func DiffCommand() *cobra.Command {
-	diff.PersistentFlags().StringVarP(&branch, "branch", "b", "master",
-		"The branch to diff against")
-	diff.PersistentFlags().StringVarP(&tool, "tool", "t", "meld",
-		"The branch to diff against")
-	diff.PersistentFlags().StringVar(&skip, "skip", magicStr,
-		"A regex that is used to skip files encountered by 'svp diff' (e.g. "+
-			"vendored files or .gitignore)")
-	return diff
-}
-
-// [note] on running vim as a subprocess
-// ---
-// If you don't set vim's input to /dev/tty directly, it fails to reset bash
-// codes that it should, such as -echo. See:
-// http://askubuntu.com/questions/171449/shell-does-not-show-typed-in-commands-reset-works-but-what-happened
-// and
-// https://superuser.com/questions/336016/invoking-vi-through-find-xargs-breaks-my-terminal-why
