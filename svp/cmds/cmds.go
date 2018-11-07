@@ -7,11 +7,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type command func([]string) error
+// Command is the type of a command in svp
+type Command func([]string) error
 
 // UnboundedCommand is a convenience function that takes a function accepting a
 // slice of arguments and returning an error, and puts it in a cobra command
-func UnboundedCommand(f command) func(*cobra.Command, []string) {
+func UnboundedCommand(f Command) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, args []string) {
 		if err := f(args); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
@@ -25,7 +26,7 @@ func UnboundedCommand(f command) func(*cobra.Command, []string) {
 // a definition of the command itself (in 'f') and return a func that can be
 // added to a Cobra command-line tool
 // TODO print usage
-func BoundedCommand(minargs, maxargs int, f command) func(*cobra.Command, []string) {
+func BoundedCommand(minargs, maxargs int, f Command) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, args []string) {
 		var err error
 		argc := len(args)
