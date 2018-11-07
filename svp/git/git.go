@@ -65,17 +65,15 @@ func initRoot() error {
 // able to read Config directly
 func InitGitInfo() {
 	gitOnce.Do(func() {
-		var err error
-		for i, f := range []func() error{initRoot, initCurBranch} {
-			if i > 0 && Root == "" {
-				break // we're not in a git repo; quit early
-			}
-			err = f()
-			if err != nil {
-				break
-			}
+		if err := initRoot(); err != nil {
+			log.Printf("error intializing git info: %v", err)
 		}
-		log.Printf("could not intialize git info: %v", err)
+		if Root == "" {
+			return // not in a git repo--don't try to initialize the branch
+		}
+		if err := initCurBranch(); err != nil {
+			log.Printf("error intializing current git branch: %v", err)
+		}
 	})
 }
 
