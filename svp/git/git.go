@@ -21,7 +21,7 @@ var (
 
 	// This error (from the 'git' CLI) means 'svp' was not run from a git repo
 	/*const */
-	notAGitRepo = regexp.MustCompile("^fatal: Not a git repository")
+	notAGitRepo = regexp.MustCompile("^fatal: not a git repository")
 )
 
 // CurBranch returns the name of the current branch of the git repo you're in
