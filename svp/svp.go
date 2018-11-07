@@ -13,8 +13,6 @@ func RootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use: "svp <command>",
 	}
-	root.AddCommand(cmds.DiffCommand())
-	root.AddCommand(cmds.ChangedFilesCommand())
 	for _, cmd := range cmds.GitHelperCommands() {
 		root.AddCommand(cmd)
 	}

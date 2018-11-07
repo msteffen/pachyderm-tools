@@ -2,7 +2,14 @@ package cmds
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"regexp"
+	"sort"
+	"strings"
 
+	"github.com/msteffen/pachyderm-tools/svp/config"
 	"github.com/msteffen/pachyderm-tools/svp/git"
 
 	"github.com/spf13/cobra"
@@ -17,6 +24,7 @@ func checkGitRepoAndCdToRoot() error {
 	if err := os.Chdir(git.Root); err != nil {
 		return fmt.Errorf("could not cd to %s: %v", git.Root, err)
 	}
+	return nil
 }
 
 // gitBoundedCommand is like BoundedCommand for commands that interact with
@@ -67,7 +75,7 @@ var rootPathCommand = &cobra.Command{
 }
 
 // changedFilesCommand returns a Cobra command that prints the output of
-// ModifiedFiles()
+// modifiedFiles()
 func changedFilesCommand() *cobra.Command {
 	changed := &cobra.Command{
 		Use:   "changed",
@@ -77,7 +85,7 @@ func changedFilesCommand() *cobra.Command {
 				return fmt.Errorf("changed must be run from inside a git repo")
 			}
 			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
-			files, err := ModifiedFiles(git.CurBranch, branch)
+			files, err := modifiedFiles(git.CurBranch, branch)
 			if err != nil {
 				return err
 			}
@@ -116,7 +124,7 @@ func diffCommand() *cobra.Command {
 			// current branch, or 2) files passed via args.
 			var files []string
 			if len(args) == 0 {
-				files0, err := ModifiedFiles(git.CurBranch, branch)
+				files0, err := modifiedFiles(git.CurBranch, branch)
 				if err != nil {
 					return fmt.Errorf("could not get list of changed files "+
 						"(to diff):\n%s", err)

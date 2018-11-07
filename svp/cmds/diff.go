@@ -8,14 +8,10 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/msteffen/pachyderm-tools/op"
-	"github.com/msteffen/pachyderm-tools/svp/config"
 	"github.com/msteffen/pachyderm-tools/svp/git"
-
-	"github.com/spf13/cobra"
 )
 
 // magicStr is the default value of the --skip flag. This lets us distinguish

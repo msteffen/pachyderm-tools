@@ -3,7 +3,6 @@ package cmds
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -33,7 +32,7 @@ var (
 // tree, by parsing the output of 'git status'.
 //
 // All files are relative to the root of the current git repo. Used by
-// ModifiedFiles()
+// modifiedFiles()
 func uncommittedFiles() (map[string]struct{}, error) {
 	cmdString := "git status --porcelain"
 	statusCmd := exec.Command("git", "status", "--porcelain")
@@ -82,7 +81,7 @@ func uncommittedFiles() (map[string]struct{}, error) {
 // present in exactly one of the branches 'left' or 'right'
 //
 // All returned file paths are relative to the root of the current git repo.
-// Used by ModifiedFiles().
+// Used by modifiedFiles().
 func committedFiles(left, right string) (map[string]struct{}, error) {
 	// Get files only in 'left' but not 'right'
 	cmd := []string{"git", "log", "--format=", "--name-only", left, "^" + right}
