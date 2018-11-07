@@ -167,6 +167,9 @@ var diff = &cobra.Command{
 	Use:   "diff <filename>",
 	Short: "Diff files against some other branch of the pachyderm repo",
 	Run: UnboundedCommand(func(args []string) error {
+		if git.Root == "" {
+			return fmt.Errorf("diff must be run from inside a git repo")
+		}
 		// Compile regex for skipping uninteresting files
 		skip2 := config.Config.Diff.Skip
 		if skip != magicStr {

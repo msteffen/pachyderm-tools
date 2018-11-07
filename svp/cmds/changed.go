@@ -124,6 +124,9 @@ func committedFiles(left, right string) (map[string]struct{}, error) {
 // All results are file paths relative to the root of the current git repo
 // (stored in GitRoot)
 func ModifiedFiles(left, right string) ([]string, error) {
+	if git.Root == "" {
+		return nil, fmt.Errorf("must be inside a git repo to list modified files")
+	}
 	// Get committed files
 	files, err := committedFiles(left, right)
 	if err != nil {
@@ -155,7 +158,7 @@ func ChangedFilesCommand() *cobra.Command {
 		Short: "List the files that have changed between this branch and master",
 		Run: BoundedCommand(0, 0, func(args []string) error {
 			if git.Root == "" {
-				return fmt.Errorf("cannot list changed files; not in a git repo")
+				return fmt.Errorf("changed must be run from inside a git repo")
 			}
 			// Sanitize 'branch' and don't run diff if 'branch' doesn't make sense
 			files, err := ModifiedFiles(git.CurBranch, branch)
