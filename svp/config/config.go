@@ -23,8 +23,12 @@ var (
 // Config is a struct containing all fields defined in the .svpconfig file
 // (this is how configured values can be accessed)
 var Config struct {
-	// The top-level directory containing all clients
+	// The top-level directory containing all clients (may contain environment
+	// variables, e.g. "${HOME}")
 	ClientDirectory string `json:"client_directory"`
+	// The same field as ClientDirectory but with variables resolved (not read or
+	// written)
+	FullClientDirectory string `json:"-"`
 
 	Diff struct {
 		// The user's preferred tool for diffing branches
@@ -65,6 +69,7 @@ func InitConfig() {
 				log.Fatalf("could not parse ${HOME}/.svpconfig: %s", err.Error())
 			}
 		}
+		Config.FullClientDirectory = replaceEnvVars(Config.ClientDirectory)
 	})
 }
 
