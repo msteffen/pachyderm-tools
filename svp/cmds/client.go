@@ -144,21 +144,23 @@ var newClient = &cobra.Command{
 		// Download data (pachyderm repo and vim binaries) into the new client
 		// TODO: This should be copied instead of downloaded every time. This takes
 		// several seconds to finish
-		//
-		// NOTE on running vim as a subprocess
-		// ---
-		// If you don't set vim's input to /dev/tty directly, it fails to reset bash
-		// codes that it should, such as -echo. See:
-		// http://askubuntu.com/questions/171449/shell-does-not-show-typed-in-commands-reset-works-but-what-happened
-		// and
-		// https://superuser.com/questions/336016/invoking-vi-through-find-xargs-breaks-my-terminal-why
 		var eg errgroup.Group
-		os.Setenv("GOPATH", clientpath)
-		os.Chdir(clientpath)
+		if err := os.Setenv("GOPATH", clientpath); err != nil {
+			return fmt.Errorf("could not set GOPATH: %v", err)
+		}
+		if err := os.Chdir(clientpath); err != nil {
+			return fmt.Errorf("could not cd to %q: %v", clientpath, err)
+		}
 		// Install vim-go binaries in a separate goroutine (slow)
 		eg.Go(func() error {
 			fmt.Println("Beginning to install vim-go binaries...")
 			op := op.StartOp()
+			// NOTE on running vim as a subprocess: If you don't set vim's input to
+			// /dev/tty directly, it fails to reset bash codes that it should, such
+			// as -echo. See:
+			// http://askubuntu.com/questions/171449/shell-does-not-show-typed-in-commands-reset-works-but-what-happened
+			// and
+			// https://superuser.com/questions/336016/invoking-vi-through-find-xargs-breaks-my-terminal-why
 			op.OutputTo(os.Stdout)
 			op.Run("vim", "-c", ":GoUpdateBinaries", "-c", ":qa")
 			if op.LastError() != nil {
