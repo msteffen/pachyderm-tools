@@ -29,7 +29,7 @@ var (
 	// 'path' is in the working directory
 	/* const */
 	workingDirOnly = regexp.MustCompile(
-		"^fatal: Path '[[:graph:]]+' exists on disk, but not in '[[:word:]/]+'.$")
+		"^fatal: Path '[[:graph:]]+' exists on disk, but not in '[[:word:]/_-]+'.$")
 )
 
 // meld shows the user the diff between 'files' and 'tmpfiles' with meld
