@@ -197,9 +197,13 @@ var newClient = &cobra.Command{
 			}
 			fmt.Printf("Adding to .ignore:\n%s\n", agIgnoreAdditions)
 
-			envRcAdditions := fmt.Sprintf("export GOPATH=\"%s/%s\"\n", config.Config.ClientDirectory, clientname)
-			envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s/%s/bin\"\n", config.Config.ClientDirectory, clientname)
-			envRcAdditions += fmt.Sprintf("export KUBECONFIG=\"%s/%s/src/github.com/pachyderm/pachyderm/.kubeconfig\"\n", config.Config.ClientDirectory, clientname)
+			envRcAdditions := fmt.Sprintf("export GOPATH=%q\n",
+				path.Join(config.Config.ClientDirectory, clientname))
+			envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s\"\n",
+				path.Join(config.Config.ClientDirectory, clientname, "bin"))
+			envRcAdditions += fmt.Sprintf("export KUBECONFIG=%q",
+				path.Join(config.Config.ClientDirectory, clientname,
+					"/src/github.com/pachyderm/pachyderm/.kubeconfig"))
 			if err := addLine("./.envrc", envRcAdditions); err != nil {
 				return err
 			}
