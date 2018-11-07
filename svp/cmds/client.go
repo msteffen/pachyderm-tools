@@ -144,6 +144,14 @@ var newClient = &cobra.Command{
 		// Download data (pachyderm repo and vim binaries) into the new client
 		// TODO: This should be copied instead of downloaded every time. This takes
 		// several seconds to finish
+		//
+		// NOTE on running vim as a subprocess
+		// ---
+		// If you don't set vim's input to /dev/tty directly, it fails to reset bash
+		// codes that it should, such as -echo. See:
+		// http://askubuntu.com/questions/171449/shell-does-not-show-typed-in-commands-reset-works-but-what-happened
+		// and
+		// https://superuser.com/questions/336016/invoking-vi-through-find-xargs-breaks-my-terminal-why
 		var eg errgroup.Group
 		os.Setenv("GOPATH", clientpath)
 		os.Chdir(clientpath)
