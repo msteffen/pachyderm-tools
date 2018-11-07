@@ -1,0 +1,2 @@
+- Tests
+- Watch clients for writes using time-tracker code and push changed files to remote cluster for interactive testing (using rsync?)
