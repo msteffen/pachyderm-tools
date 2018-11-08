@@ -151,7 +151,7 @@ var newClient = &cobra.Command{
 		}
 		envRcAdditions := fmt.Sprintf("export GOPATH=%q\n",
 			path.Join(config.Config.ClientDirectory, clientname))
-		envRcAdditions += fmt.Sprintf("export PATH=\"${PATH}:%s\"\n",
+		envRcAdditions += fmt.Sprintf("export PATH=\"%s:${PATH}\"\n",
 			path.Join(config.Config.ClientDirectory, clientname, "bin"))
 		envRcAdditions += fmt.Sprintf("export KUBECONFIG=%q",
 			path.Join(config.Config.ClientDirectory, clientname, ".kubeconfig"))
