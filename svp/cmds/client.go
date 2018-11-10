@@ -149,11 +149,14 @@ var newClient = &cobra.Command{
 		if err := os.Chdir(clientpath); err != nil {
 			return fmt.Errorf("could not cd to %q: %v", clientpath, err)
 		}
-		envRcAdditions := fmt.Sprintf("export GOPATH=%q\n",
-			path.Join(config.Config.ClientDirectory, clientname))
-		envRcAdditions += fmt.Sprintf("export PATH=\"%s:${PATH}\"\n",
-			path.Join(config.Config.ClientDirectory, clientname, "bin"))
-		envRcAdditions += fmt.Sprintf("export KUBECONFIG=%q",
+		envRcAdditions := fmt.Sprintf(""+
+			"export GOPATH=%q\n"+
+			"export PATH=\"%s:${PATH}\"\n"+
+			"if [[ -z \"${KUBECONFIG}\" ]]; then\n"+
+			"  export KUBECONFIG=%q\n"+
+			"fi",
+			path.Join(config.Config.ClientDirectory, clientname),
+			path.Join(config.Config.ClientDirectory, clientname, "bin"),
 			path.Join(config.Config.ClientDirectory, clientname, ".kubeconfig"))
 		if err := addLine("./.envrc", envRcAdditions); err != nil {
 			return err
