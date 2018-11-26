@@ -82,8 +82,27 @@ func uncommittedFiles() (map[string]struct{}, error) {
 //
 // All returned file paths are relative to the root of the current git repo.
 // Used by modifiedFiles().
+//
+// TODO There are two diff (or log) commands that I could use, and I'm not 100%
+// committed to the one I have:
+//   1) git diff [--options] <commit> <commit> [--] [<path>...]
+//      git diff [--options] <commit>..<commit> [--] [<path>...]
+//      # view the changes between two arbitrary <commit>.
+//
+//   2) git diff [--options] <commit_1>...<commit_2> [--] [<path>...]
+//      # view the changes on the branch containing and up to  <commit_2>,
+//      # starting at a common ancestor of both commits. Equivalent to:
+//      #   $ git diff $(git-merge-base A B) B
+//
 func committedFiles(left, right string) (map[string]struct{}, error) {
 	// Get files only in 'left' but not 'right'
+	// Note that the leading '^' means "exclude commits reachable from 'right' and
+	// is equivalent to 'left..right'. Per 'man 7 gitrevisions':
+	//   The .. (two-dot) Range Notation
+	//       The ^r1 r2 set operation appears so often that there is a shorthand
+	//       for it. When you have two commits r1 and r2, you can ask for commits
+	//       that are reachable from r2 excluding those that are reachable from
+	//       r1 by ^r1 r2 and it can be written as r1..r2.
 	cmd := []string{"git", "log", "--format=", "--name-only", left, "^" + right}
 	cmdString := strings.Join(cmd, " ")
 	logCmd := exec.Command(cmd[0], cmd[1:]...)
