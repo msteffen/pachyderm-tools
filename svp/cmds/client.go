@@ -170,9 +170,9 @@ var newClient = &cobra.Command{
 			"  )\n"+
 			"  len=\"${#ADDRESSES[@]}\"\n"+
 			"  if [[ \"${len}\" -gt 0 ]]; then\n"+
-			"    export ADDRESS=\"${ADDRESSES[RANDOM%len]}:30650\"\n"+
+			"    export ADDRESS=\"${ADDRESSES[RANDOM%%len]}:30650\"\n"+
 			"    echo \"===============================\"\n"+
-			"    echo -e \"If deployed, the dashboard can be accessed at:\\n  ${ADDRESS%:30650}:30080\"\n"+
+			"    echo -e \"If deployed, the dashboard can be accessed at:\\n  ${ADDRESS%%:30650}:30080\"\n"+
 			"    echo \"===============================\"\n"+
 			"  else\n"+
 			"    echo \"kubectl get nodes failed--could not set ADDRESS\"\n"+
@@ -277,7 +277,7 @@ var deleteClient = &cobra.Command{
 		gitpath := path.Join(clientpath, "src/github.com/pachyderm/pachyderm")
 		if _, err := os.Stat(gitpath); err != nil {
 			if os.IsNotExist(err) {
-				fmt.Println("%s does not exist. Delete client dir anyway? y/N:")
+				fmt.Printf("%s does not exist. Delete client dir anyway? y/N:\n", gitpath)
 				stdinScanner := bufio.NewScanner(os.Stdin)
 				stdinScanner.Scan()
 				if char := stdinScanner.Text()[0]; char == 'y' || char == 'Y' {

@@ -176,8 +176,8 @@ func diffCommand() *cobra.Command {
 				}
 				return nil
 			}
-			return fmt.Errorf("did not recognize diff command %s; must be \"vim\" " +
-				"or \"meld\"")
+			return fmt.Errorf("did not recognize diff command %s; must be \"vim\" "+
+				"or \"meld\"", tool)
 		}),
 	}
 
