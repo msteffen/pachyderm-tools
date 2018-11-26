@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"os/exec"
@@ -12,9 +13,13 @@ import (
 
 // Regexes for parsing the output of 'git status' in uncommittedFiles()
 var (
-	/* const */ whitespace = regexp.MustCompile("^[ \t\r\n]*$")
-	/* const */ statusPlain = regexp.MustCompile("^(..) ([^ ]*)$")
-	/* const */ statusArrow = regexp.MustCompile("^(..) [^ ]* -> ([^ ]*)$")
+	fileNameWithQuotesRe    = regexp.MustCompile(`"(?:\"|[^"])+"`)
+	fileNameWithoutQuotesRe = regexp.MustCompile(`[^" ]+`)
+	fileNameRe              = regexp.MustCompile(fmt.Sprintf("(?:%s|%s)", fileNameWithoutQuotesRe, fileNameWithQuotesRe))
+	plainStatusLineRe       = regexp.MustCompile(fmt.Sprintf("^(..) (%s)$", fileNameRe))
+	arrowStatusLineRe       = regexp.MustCompile(fmt.Sprintf("^(..) %s -> (%s)$", fileNameRe, fileNameRe))
+	whitespaceRe            = regexp.MustCompile("^[ \t\r\n]*$")
+	slashRe                 = regexp.MustCompile(`\\`)
 
 	// alwaysModified contains files that the svp tool modifies when creating a new
 	// client, along with files that aren't edited by hand (e.g. the 'pachd'
@@ -36,26 +41,26 @@ var (
 func uncommittedFiles() (map[string]struct{}, error) {
 	cmdString := "git status --porcelain"
 	statusCmd := exec.Command("git", "status", "--porcelain")
-	fileLines, err := statusCmd.Output()
+	statusOutput, err := statusCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("Could not get files from git status: (\"%s\"):\n%s",
 			cmdString, err)
 	}
 	files := make(map[string]struct{})
-	for _, line := range bytes.Split(fileLines, []byte{'\n'}) {
-		if len(line) == 0 || whitespace.Match(line) {
+	for s := bufio.NewScanner(bytes.NewReader(statusOutput)); s.Scan(); {
+		if len(s.Bytes()) == 0 || whitespaceRe.Match(s.Bytes()) {
 			continue
 		}
 		// Match status line against one of the regexes
 		captureGroups, err := func() ([][]byte, error) {
-			if c := statusPlain.FindSubmatch(line); c != nil {
+			if c := plainStatusLineRe.FindSubmatch(s.Bytes()); c != nil {
 				return c, nil
 			}
-			if c := statusArrow.FindSubmatch(line); c != nil {
+			if c := arrowStatusLineRe.FindSubmatch(s.Bytes()); c != nil {
 				return c, nil
 			}
 			return nil, fmt.Errorf("No status regex matched \"%s\" line:\n%s",
-				cmdString, string(line))
+				cmdString, string(s.Bytes()))
 		}()
 		if err != nil {
 			return nil, err
@@ -66,7 +71,14 @@ func uncommittedFiles() (map[string]struct{}, error) {
 		if bytes.Equal(captureGroups[1], []byte{'?', '?'}) {
 			continue
 		}
-		filename := string(captureGroups[2])
+		var filename string
+		if fileNameWithQuotesRe.Match(captureGroups[2]) {
+			withoutQuotes := captureGroups[2]
+			withoutQuotes = withoutQuotes[1 : len(withoutQuotes)-1] // strip quotes
+			filename = string(slashRe.ReplaceAllLiteral(withoutQuotes, nil))
+		} else {
+			filename = string(captureGroups[2])
+		}
 		if _, boring := alwaysModified[filename]; !boring {
 			files[filename] = struct{}{}
 		}
@@ -86,7 +98,7 @@ func uncommittedFiles() (map[string]struct{}, error) {
 // TODO There are two diff (or log) commands that I could use, and I'm not 100%
 // committed to the one I have:
 //   1) git log [--options] <commit_2>..<commit_1>
-//      git log [--options] <commit_1> ^<commit_2> # Currently used
+//      git log [--options] <commit_1> ^<commit_2>
 //      # View changes due to commits reachable from <commit_1> but not
 //      # <commit_2>
 //
@@ -98,7 +110,7 @@ func uncommittedFiles() (map[string]struct{}, error) {
 //         that are reachable from r2 excluding those that are reachable from
 //         r1 by ^r1 r2 and it can be written as r1..r2.
 //
-//   2) git diff [--options] <commit> <commit>
+//   2) git diff [--options] <commit> <commit> # Currently used
 //      git diff [--options] <commit>..<commit>
 //      # view the changes between two arbitrary <commit>.
 //
@@ -116,32 +128,21 @@ func uncommittedFiles() (map[string]struct{}, error) {
 //     defined in the "SPECIFYING RANGES" section in gitrevisions(7).
 
 func committedFiles(left, right string) (map[string]struct{}, error) {
-	// Get files only in 'left' but not 'right'
-	cmd := []string{"git", "log", "--format=", "--name-only", left, "^" + right}
+	// Get files changed between 'left' and 'right'
+	cmd := []string{"git", "diff", "--name-only", left, right}
 	cmdString := strings.Join(cmd, " ")
-	logCmd := exec.Command(cmd[0], cmd[1:]...)
-	leftLogLines, err := logCmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("Could not get commit log (\"%s\"):\n%s", cmdString,
-			err)
-	}
-	// Get files only in 'right' but not 'left'
-	cmd = []string{"git", "log", "--format=", "--name-only", right, "^" + left}
-	cmdString = strings.Join(cmd, " ")
-	logCmd = exec.Command(cmd[0], cmd[1:]...)
-	rightLogLines, err := logCmd.Output()
+	diffCmd := exec.Command(cmd[0], cmd[1:]...)
+	diffCmdOutput, err := diffCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("Could not get commit log (\"%s\"):\n%s", cmdString,
 			err)
 	}
 
-	// Dedupe files in output of command (i.e. create output set)
+	// put files into map for deduping
 	files := make(map[string]struct{})
-	for _, log := range [][]byte{leftLogLines, rightLogLines} {
-		for _, line := range bytes.Split(log, []byte{'\n'}) {
-			if len(line) > 0 {
-				files[string(line)] = struct{}{}
-			}
+	for s := bufio.NewScanner(bytes.NewBuffer(diffCmdOutput)); s.Scan(); {
+		if len(s.Bytes()) > 0 {
+			files[s.Text()] = struct{}{}
 		}
 	}
 	return files, nil
