@@ -181,7 +181,7 @@ func diffCommand() *cobra.Command {
 		}),
 	}
 
-	diff.PersistentFlags().StringVarP(&branch, "branch", "b", "master",
+	diff.PersistentFlags().StringVarP(&branch, "branch", "b", "origin/master",
 		"The branch to diff against")
 	diff.PersistentFlags().StringVarP(&tool, "tool", "t", "meld",
 		"The branch to diff against")
