@@ -154,35 +154,15 @@ var newClient = &cobra.Command{
 			"export PATH=\"%s:${PATH}\"\n"+
 			"if [[ -z \"${KUBECONFIG}\" ]]; then\n"+
 			"  export KUBECONFIG=%q\n"+
-			"fi\n\n"+
-			"if \\\n"+
-			"  kubectl config current-context >/dev/null 2>&1 \\\n"+
-			"  && kubectl version --request-timeout=1s >/dev/null 2>&1\n"+
-			"then\n"+
-			"  # Override address using kubectl describe node output\n"+
-			"  # (pick random node)\n"+
-			"  echo \"Kubernetes is available\"\n"+
-			"  echo \"Getting PACHD_ADDRESS from kubectl nodes--may be slow\"\n"+
-			"  ADDRESSES=( $(kubectl get nodes --request-timeout=5s -o json \\\n"+
-			"    | jq --raw-output \\\n"+
-			"      '.items[].status.addresses[] | select(.type == \"ExternalIP\").address'\n"+
-			"    )\n"+
-			"  )\n"+
-			"  len=\"${#ADDRESSES[@]}\"\n"+
-			"  if [[ \"${len}\" -gt 0 ]]; then\n"+
-			"    export PACHD_ADDRESS=\"${ADDRESSES[RANDOM%%len]}:30650\"\n"+
-			"    echo \"===============================\"\n"+
-			"    echo -e \"If deployed, the dashboard can be accessed at:\\n  ${PACHD_ADDRESS%%:30650}:30080\"\n"+
-			"    echo \"===============================\"\n"+
-			"  else\n"+
-			"    echo \"kubectl get nodes failed--could not set PACHD_ADDRESS\"\n"+
-			"  fi\n"+
-			"else\n"+
-			"  echo \"kubectl config current-context or kubectl version failed--could not set PACHD_ADDRESS\"\n"+
-			"fi\n",
+			"fi\n"+
+			"if [[ -z \"${PACH_CONFIG}\" ]]; then\n"+
+			"  export PACH_CONFIG=%q\n"+
+			"fi\n"+
+			"",
 			path.Join(config.Config.ClientDirectory, clientname),
 			path.Join(config.Config.ClientDirectory, clientname, "bin"),
-			path.Join(config.Config.ClientDirectory, clientname, ".kubeconfig"))
+			path.Join(config.Config.ClientDirectory, clientname, "kubeconfig"),
+			path.Join(config.Config.ClientDirectory, clientname, "pachconfig"))
 		if err := addLine("./.envrc", envRcAdditions); err != nil {
 			return err
 		}
