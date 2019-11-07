@@ -13,13 +13,14 @@ import (
 
 // Regexes for parsing the output of 'git status' in uncommittedFiles()
 var (
-	fileNameWithQuotesRe    = regexp.MustCompile(`"(?:\"|[^"])+"`)
-	fileNameWithoutQuotesRe = regexp.MustCompile(`[^" ]+`)
-	fileNameRe              = regexp.MustCompile(fmt.Sprintf("(?:%s|%s)", fileNameWithoutQuotesRe, fileNameWithQuotesRe))
-	plainStatusLineRe       = regexp.MustCompile(fmt.Sprintf("^(..) (%s)$", fileNameRe))
-	arrowStatusLineRe       = regexp.MustCompile(fmt.Sprintf("^(..) %s -> (%s)$", fileNameRe, fileNameRe))
-	whitespaceRe            = regexp.MustCompile("^[ \t\r\n]*$")
-	slashRe                 = regexp.MustCompile(`\\`)
+	// arrow is the separator printed by 'git status --porcelain' when a file has
+	// been moved from one path to another
+	arrow = []byte(` -> `)
+
+	// 'git status' sometimes escapes characters in quoted filenames in status
+	// lines. This regex allows us to remove the escaping slash when unquoting
+	// filenames
+	slashRe = regexp.MustCompile(`\\`)
 
 	// alwaysModified contains files that the svp tool modifies when creating a new
 	// client, along with files that aren't edited by hand (e.g. the 'pachd'
@@ -32,6 +33,13 @@ var (
 		"pachd":      struct{}{},
 	}
 )
+
+func last(b []byte) byte {
+	if len(b) == 0 {
+		return 0
+	}
+	return b[len(b)-1]
+}
 
 // uncommittedFiles returns the list of files that have changed in the working
 // tree, by parsing the output of 'git status'.
@@ -48,39 +56,33 @@ func uncommittedFiles() (map[string]struct{}, error) {
 	}
 	files := make(map[string]struct{})
 	for s := bufio.NewScanner(bytes.NewReader(statusOutput)); s.Scan(); {
-		if len(s.Bytes()) == 0 || whitespaceRe.Match(s.Bytes()) {
+		// Skip blank lines in status
+		if len(bytes.TrimSpace(s.Bytes())) == 0 {
 			continue
-		}
-		// Match status line against one of the regexes
-		captureGroups, err := func() ([][]byte, error) {
-			if c := plainStatusLineRe.FindSubmatch(s.Bytes()); c != nil {
-				return c, nil
-			}
-			if c := arrowStatusLineRe.FindSubmatch(s.Bytes()); c != nil {
-				return c, nil
-			}
-			return nil, fmt.Errorf("No status regex matched \"%s\" line:\n%s",
-				cmdString, string(s.Bytes()))
-		}()
-		if err != nil {
-			return nil, err
 		}
 
 		// Skip files that are in the workding directory but haven't been added
 		// to the index yet (usually logs and scripts. line starts with ??)
-		if bytes.Equal(captureGroups[1], []byte{'?', '?'}) {
+		status := string(s.Bytes()[:2])
+		if status == "??" {
 			continue
 		}
-		var filename string
-		if fileNameWithQuotesRe.Match(captureGroups[2]) {
-			withoutQuotes := captureGroups[2]
-			withoutQuotes = withoutQuotes[1 : len(withoutQuotes)-1] // strip quotes
-			filename = string(slashRe.ReplaceAllLiteral(withoutQuotes, nil))
-		} else {
-			filename = string(captureGroups[2])
+
+		// Extract filename from status line
+		filename := s.Bytes()[3:]
+		if bytes.Contains(filename, arrow) {
+			filename = bytes.Split(filename, arrow)[1]
 		}
-		if _, boring := alwaysModified[filename]; !boring {
-			files[filename] = struct{}{}
+
+		// Remove any surrounding quotes
+		if len(filename) > 0 && filename[0] == byte('"') && last(filename) == byte('"') {
+			filename = slashRe.ReplaceAllLiteral(filename[1:len(filename)-1], nil)
+		}
+
+		// Ignore files that we change automatically in every client
+		filenameStr := string(filename)
+		if _, boring := alwaysModified[filenameStr]; !boring {
+			files[filenameStr] = struct{}{}
 		}
 	}
 	return files, nil
