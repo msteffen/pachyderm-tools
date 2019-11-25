@@ -158,6 +158,7 @@ var newClient = &cobra.Command{
 			"if [[ -z \"${PACH_CONFIG}\" ]]; then\n"+
 			"  export PACH_CONFIG=%q\n"+
 			"fi\n"+
+			"export GO111MODULE=off\n"+
 			"",
 			path.Join(config.Config.ClientDirectory, clientname),
 			path.Join(config.Config.ClientDirectory, clientname, "bin"),
