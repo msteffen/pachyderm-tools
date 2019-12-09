@@ -90,7 +90,7 @@ func uncommittedFiles() (map[string]struct{}, error) {
 
 // committedFiles attempts to return the set of files (as a map from path ->
 // 'true') that are different in the branches 'left' and 'right'. This is based
-// on the git command 'git log --name-only' (i.e. it the list of files that are
+// on the git command 'git log --name-only' (i.e. the list of files that are
 // different is based on the list of files changed in some commit that is
 // present in exactly one of the branches 'left' or 'right'
 //
