@@ -29,6 +29,7 @@ func initCurBranch() error {
 	// Get current branch
 	op := op.StartOp()
 	op.CollectStdOut()
+	// Currently also aliased as 'git cur-branch'
 	op.Run("git", "rev-parse", "--abbrev-ref", "HEAD")
 	if op.LastError() != nil {
 		if notAGitRepo.Match(op.LastErrorMsg()) {
@@ -46,6 +47,7 @@ func initCurBranch() error {
 func initRoot() error {
 	op := op.StartOp()
 	op.CollectStdOut()
+	// Currently also aliased as 'git root'
 	op.Run("git", "rev-parse", "--show-toplevel")
 	if op.LastError() != nil {
 		if notAGitRepo.Match(op.LastErrorMsg()) {

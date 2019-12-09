@@ -53,27 +53,6 @@ func gitUnboundedCommand(f Command) func(*cobra.Command, []string) {
 	})
 }
 
-var curBranchCommand = &cobra.Command{
-	Use:   "cur-branch",
-	Short: "Print the name of the current branch of the git repo you're in",
-	Run: gitBoundedCommand(0, 0, func(args []string) error {
-		fmt.Println(git.CurBranch)
-		return nil
-	}),
-}
-
-var rootPathCommand = &cobra.Command{
-	Use:   "root-path",
-	Short: "Print absolute path to the root of the git repo you're in",
-	Run: BoundedCommand(0, 0, func(args []string) error {
-		if git.Root == "" {
-			return fmt.Errorf("root-path must be run from inside a git repo")
-		}
-		fmt.Println(git.Root)
-		return nil
-	}),
-}
-
 // changedFilesCommand returns a Cobra command that prints the output of
 // modifiedFiles()
 func changedFilesCommand() *cobra.Command {
@@ -195,8 +174,6 @@ func diffCommand() *cobra.Command {
 // CurBranch() and GitRoot()
 func GitHelperCommands() []*cobra.Command {
 	return []*cobra.Command{
-		curBranchCommand,
-		rootPathCommand,
 		changedFilesCommand(),
 		diffCommand(),
 	}
