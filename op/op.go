@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -16,8 +17,8 @@ type Op struct {
 	action string       // Updated as we run the command, for reporting errors
 	err    error        // The error oject returned by exec.Command (or some such)
 	errMsg bytes.Buffer // The text written by the last command to stderr
-	input  io.Reader    // The
 	output io.Writer    // The text written by the last command to stdout (if set)
+	input  io.Reader    // The text read as input
 }
 
 // StartOp creates and initializes a new Op
@@ -25,7 +26,10 @@ func StartOp() *Op {
 	return &Op{}
 }
 
-// LastError returns any errors produced during a Run() call.
+// LastError returns any errors produced during a Run() call (i.e. the error
+// returned from the most recent call to 'Run()'. This is useful if you have a
+// long chain of Run() commands and only want to check for an error at the end
+// of them all.
 func (o *Op) LastError() error {
 	return o.err
 }
@@ -40,6 +44,9 @@ func (o *Op) LastErrorMsg() []byte {
 // DetailedError is similar to LastError(), but it produces a more detailed
 // error message
 func (o *Op) DetailedError() error {
+	if o.err == nil {
+		return nil
+	}
 	if o.errMsg.Len() > 0 {
 		return fmt.Errorf("%s (command: \"%s\"):\n%s\n(%s)", o.action,
 			strings.Join(o.args, " "), o.errMsg.Bytes(), o.err.Error())
@@ -77,11 +84,26 @@ func (o *Op) InputFrom(r io.Reader) *Op {
 	return o
 }
 
-// Run runs a command (assuming no previous commands have failed)
-func (o *Op) Run(inputargs ...string) {
+func (o *Op) Chdir(dest string) error {
 	// Only run while the whole Op is still successful
 	if o.err != nil {
-		return
+		return o.err
+	}
+	o.args = []string{"cd", dest}
+	if o.err = os.Chdir(dest); o.err != nil {
+		o.action = "could not change directory"
+	}
+	return o.err
+}
+
+// Run runs a command (assuming no previous commands have failed). It returns
+// whatever error was yielded by the first command to fail, or nil if all
+// commands up to this point have succeeded. Note that LastError() returns the
+// most recently returned value from 'Run()'
+func (o *Op) Run(inputargs ...string) error {
+	// Only run while the whole Op is still successful
+	if o.err != nil {
+		return o.err
 	}
 	// Prepare buffers for next command
 	o.errMsg.Reset()
@@ -105,6 +127,6 @@ func (o *Op) Run(inputargs ...string) {
 	}
 	if o.err = cmd.Run(); o.err != nil {
 		o.action = "could not run command"
-		return
 	}
+	return o.err
 }
