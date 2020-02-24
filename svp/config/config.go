@@ -26,15 +26,11 @@ var Config struct {
 	// The top-level directory containing all clients
 	ClientDirectory string `json:"client_directory"`
 
-	Diff struct {
-		// The user's preferred tool for diffing branches
-		Tool string `json:"tool"`
+	// The user's preferred tool for diffing branches
+	DiffTool string `json:"diff_tool"`
 
-		// Regex to let users skip certain files in svp diff
-		// TODO: Skip should be settable per client (with maybe a global default?)
-		// (maybe a flag override allowed too?)
-		Skip string `json:"skip"`
-	} `json:"diff"`
+	// The default template if 'new-client' is called with no template
+	DefaultTemplate string `json:"default_template"`
 }
 
 func configPath() string {
@@ -74,5 +70,5 @@ func init() {
 
 func loadDefaultConfig() {
 	Config.ClientDirectory = path.Join(os.Getenv("HOME"), "clients")
-	Config.Diff.Tool = "meld"
+	Config.DiffTool = "meld"
 }
