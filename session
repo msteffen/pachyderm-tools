@@ -1,0 +1,105 @@
+#!/usr/bin/python3
+
+import argparse
+import yaml
+import re
+import subprocess
+import sys
+import os
+from datetime import date
+
+parser = argparse.ArgumentParser(
+  description='Save & restore terminal tabs and notes about work in progress '+
+    'across restarts')
+parser.add_argument('--restore', '-r', action='store_true',
+  help="Restore the previous session")
+parser.add_argument('--show', '-s', action='store_true',
+  help="Show all entries for the previous session")
+args = parser.parse_args()
+
+if args.restore and args.show:
+  raise Exception("Must set at most one of --show and --restore")
+
+def get_git_branch():
+  output = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+    capture_output=True)
+  if output == None:
+    raise Exception("error getting current branch")
+  if output.returncode != 0:
+      return None
+  return output.stdout.decode('ascii').rstrip()
+
+def get_client():
+  m = re.match('/home/mjs/clients/([^/]+).*', os.getcwd())
+  if m is None or m.groups() is None or len(m.groups()) == 0:
+    return None
+  if len(m.groups()) > 1:
+    raise Exception("unexpected number of capture groups when trying to get client")
+  return m.groups()[0]
+
+def prompt(question):
+  print(question)
+  print("(Blank line ends the message)")
+  message = []
+  while True:
+    line = sys.stdin.readline().strip()
+    if line == "": break
+    message.append(line)
+  return "\n".join(message)
+
+def save():
+  with open("/home/mjs/Desktop/in_progress.yaml", "a") as f:
+    try:
+      r = open("/home/mjs/Desktop/in_progress.yaml", "r")
+      docs = yaml.safe_load_all(r)
+      last_doc = None
+      for doc in docs:
+        last_doc = doc
+      if last_doc is None:
+        raise RuntimeError("empty f, or could not parse")
+      prevd = date.fromisoformat(last_doc["date"])
+      if prevd != date.today():
+        f.write('---\ndate: "{}"\ntabs:\n'.format(date.today().isoformat()))
+    except (IOError, RuntimeError):
+      f.write('date: "{}"\ntabs:\n'.format(date.today().isoformat()))
+    finally:
+      r.close()
+    doc = {
+      "dir": os.getcwd(),
+      "notes": prompt("What are you working on?"),
+    }
+    git_branch = get_git_branch()
+    if git_branch is not None:
+        doc["git-branch"] = git_branch
+    client = get_client()
+    if client is not None:
+        doc["client"] = client
+    yaml.dump([doc], f, sort_keys=True, indent=2)
+
+def restore():
+  with open("/home/mjs/Desktop/in_progress.yaml", "r") as f:
+    for doc in yaml.safe_load_all(f):
+      print(doc)
+
+def show():
+  try:
+    r = open("/home/mjs/Desktop/in_progress.yaml", "r")
+    docs = yaml.safe_load_all(r)
+    last_doc = None
+    for doc in docs:
+      last_doc = doc
+    if last_doc is None:
+      raise RuntimeError("empty f, or could not parse")
+    yaml.dump(last_doc, sys.stdout, indent=2)
+  except (IOError, RuntimeError) as err:
+    sys.stderr.write("Could not show previous session: {}".format(str(err)))
+  finally:
+    r.close()
+  
+if __name__ == "__main__":
+  if args.restore:
+    restore()
+  elif args.show:
+    show()
+  else:
+    save()
