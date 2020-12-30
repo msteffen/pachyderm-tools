@@ -1,6 +1,6 @@
 package strqueue
 
-// Q implements a queue of integers
+// Q implements a queue of strings
 type Q struct {
 	elems       []string
 	start, size int
